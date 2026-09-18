@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Do not include a Co-Authored-By line in commit messages.
+
 ## What this is
 
 IT3081 (Statistical Modelling) university group assignment. Consultancy-framed analysis of
@@ -57,3 +59,4 @@ innovation proposal, expert interview, final recommendations) with no correspond
 
 **Team ownership** (also in README.md): different people own different notebooks/tasks, so
 avoid restructuring `src/` function signatures without checking what other notebooks call.
+

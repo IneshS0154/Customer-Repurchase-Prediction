@@ -10,3 +10,6 @@ data/processed/*.parquet
 .DS_Store
 *.egg-info/
 .env
+
+# Other
+CLAUDE.md
