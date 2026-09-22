@@ -1,24 +1,12 @@
-# R
-.Rhistory
-.RData
-.Rproj.user/
-*.Rproj
-notebooks/figure/
-
-# Python (legacy-python/)
 .venv/
 venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
-*.egg-info/
-
-# Data (gitignored - re-download/regenerate, see README)
-data/raw/*.zip
-data/raw/*.xlsx
-data/processed/*.csv
-data/processed/*.parquet
-
-# OS / env
 .DS_Store
+*.egg-info/
 .env
+
+# Other
+CLAUDE.md
+commands.txt
