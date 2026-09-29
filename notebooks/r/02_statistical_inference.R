@@ -76,9 +76,29 @@ print(lev_res)
 var_by_group <- customers %>% group_by(IsUK_f) %>%
   summarise(variance = var(AvgBasketValue), sd = sd(AvgBasketValue), n = n())
 print(var_by_group)
-cat("Variance ratio (International / UK):",
-    round(var_by_group$variance[var_by_group$IsUK_f == "International"] /
-          var_by_group$variance[var_by_group$IsUK_f == "UK"], 2), "\n")
+
+vr_point <- var_by_group$variance[var_by_group$IsUK_f == "International"] /
+            var_by_group$variance[var_by_group$IsUK_f == "UK"]
+cat("Variance ratio (International / UK):", round(vr_point, 2), "\n")
+
+# Bootstrap 95% CI for the variance ratio. A classical parametric CI (e.g.
+# from the F-distribution) assumes normality - the same assumption already
+# rejected when choosing Brown-Forsythe over the classical F-test above, so
+# using it here for the CI would be inconsistent. Resample each group
+# independently with replacement, recompute the ratio, and take percentiles.
+set.seed(42)
+intl_vals <- customers$AvgBasketValue[customers$IsUK_f == "International"]
+uk_vals <- customers$AvgBasketValue[customers$IsUK_f == "UK"]
+B <- 5000
+boot_ratios <- numeric(B)
+for (i in 1:B) {
+  intl_bs <- sample(intl_vals, length(intl_vals), replace = TRUE)
+  uk_bs <- sample(uk_vals, length(uk_vals), replace = TRUE)
+  boot_ratios[i] <- var(intl_bs) / var(uk_bs)
+}
+vr_ci <- quantile(boot_ratios, c(0.025, 0.975))
+cat("Bootstrap 95% CI for variance ratio (", B, "resamples):",
+    round(vr_ci[1], 2), "to", round(vr_ci[2], 2), "\n")
 
 # ---- Test 4: ANOVA ----------------------------------------------------------
 # H0: mean log(Monetary) is equal across RFM segments (Frequency quartiles)
@@ -143,11 +163,17 @@ cat("\nDone.\n")
 # to justify major spend reallocation by itself.
 #
 # Test 3 (variances): International customers' basket values are far more
-# variable than UK customers' (variance ratio 5.24x): Levene's F(1, 5251) =
-# 123.9, p < .001. Practical implication: a single average order value
-# figure is much less representative for international accounts - discount
-# or credit policies set from the average risk being wrong for many
-# international customers in either direction.
+# variable than UK customers' (variance ratio 5.24x, bootstrap 95% CI
+# [1.94, 13.39], 5000 resamples): Levene's F(1, 5251) = 123.9, p < .001.
+# The CI is wide and entirely above 1, so we can say with confidence the
+# true ratio exceeds 1 (international is more variable), but not pin down
+# the exact multiple - expected, given the international group is much
+# smaller (n = 457) than the UK group (n = 4796) and both are skewed.
+# Practical implication: a single average order value figure is much less
+# representative for international accounts - discount or credit policies
+# set from the average risk being wrong for many international customers
+# in either direction, and the width of the CI itself is a reason not to
+# over-commit to the specific 5.24x figure in the final report.
 #
 # Test 4 (ANOVA): Monetary value differs sharply across Frequency quartiles
 # (Welch F(3, 2901) = 2452, p < .001, eta-sq = 0.615), and every pairwise
