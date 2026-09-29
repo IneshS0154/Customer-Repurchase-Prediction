@@ -14,6 +14,8 @@ library(car)         # leveneTest
 library(rstatix)     # welch_anova_test, games_howell_test
 library(effectsize)  # cohens_d, cramers_v, eta_squared
 
+source("R/features.R")  # for CUTOFF_DATE, used to derive acquisition cohort in Test 4
+
 customers <- read.csv("data/processed/customer_table.csv")
 cat("n customers:", nrow(customers), "\n")
 
@@ -101,29 +103,40 @@ cat("Bootstrap 95% CI for variance ratio (", B, "resamples):",
     round(vr_ci[1], 2), "to", round(vr_ci[2], 2), "\n")
 
 # ---- Test 4: ANOVA ----------------------------------------------------------
-# H0: mean log(Monetary) is equal across RFM segments (Frequency quartiles)
-# H1: at least one segment differs
+# H0: mean log(Monetary) is equal across acquisition-year cohorts
+# H1: at least one cohort differs
+#
+# Originally grouped by Frequency quartile, but Monetary = Frequency x
+# AvgBasketValue by construction (see src/features.R / R/features.R), so
+# "does Monetary differ by Frequency quartile" is close to tautological -
+# of course customers who order more spend more, almost by definition, and
+# the resulting effect size mixes a real business signal with a mechanical
+# one. Acquisition cohort (the year the customer's first purchase falls in)
+# is independent of how Monetary is computed and answers a genuinely
+# separate business question: does historical customer value differ by
+# when the customer was acquired? That is directly useful for marketing
+# (e.g. "are recently-acquired customers worth less than older cohorts?").
 #
 # Welch ANOVA (does not assume equal variances across groups) with
 # Games-Howell post-hoc pairwise comparisons. Kruskal-Wallis run alongside as
 # a non-parametric check.
 
-cat("\n=== Test 4: ANOVA (Welch, RFM segments by Frequency quartile) ===\n")
-customers$FreqSegment <- ntile(customers$Frequency, 4)
-customers$FreqSegment <- factor(customers$FreqSegment,
-                                 labels = c("Q1 (lowest)", "Q2", "Q3", "Q4 (highest)"))
+cat("\n=== Test 4: ANOVA (Welch, acquisition-year cohort) ===\n")
+customers$FirstPurchase <- as.Date(CUTOFF_DATE) - customers$TenureDays
+customers$AcqCohort <- factor(format(customers$FirstPurchase, "%Y"))
+print(table(customers$AcqCohort))
 customers$log_monetary <- log(customers$Monetary)
 
-welch_res <- welch_anova_test(customers, log_monetary ~ FreqSegment)
+welch_res <- welch_anova_test(customers, log_monetary ~ AcqCohort)
 print(welch_res)
 
-eta_res <- eta_squared(aov(log_monetary ~ FreqSegment, data = customers))
+eta_res <- eta_squared(aov(log_monetary ~ AcqCohort, data = customers))
 cat("Eta-squared:", round(eta_res$Eta2[1], 4), "\n")
 
-gh_res <- games_howell_test(customers, log_monetary ~ FreqSegment)
+gh_res <- games_howell_test(customers, log_monetary ~ AcqCohort)
 print(gh_res)
 
-kw_res <- kruskal.test(log_monetary ~ FreqSegment, data = customers)
+kw_res <- kruskal.test(log_monetary ~ AcqCohort, data = customers)
 cat("Kruskal-Wallis robustness check: chi-sq =", round(kw_res$statistic, 2),
     " df =", kw_res$parameter, " p =", format.pval(kw_res$p.value, digits = 3), "\n")
 
@@ -136,7 +149,7 @@ cat("Kruskal-Wallis robustness check: chi-sq =", round(kw_res$statistic, 2),
 cat("\n=== Multiple comparisons note ===\n")
 cat("Four pre-planned tests, four different questions: no Bonferroni across them.\n")
 cat("Bonferroni threshold if it were applied:", ALPHA / 4, "\n")
-cat("Within Test 4's 6 pairwise comparisons, Games-Howell already controls the family-wise error rate.\n")
+cat("Within Test 4's 3 pairwise comparisons (3 acquisition cohorts), Games-Howell already controls the family-wise error rate.\n")
 
 cat("\nDone.\n")
 
@@ -175,14 +188,29 @@ cat("\nDone.\n")
 # in either direction, and the width of the CI itself is a reason not to
 # over-commit to the specific 5.24x figure in the final report.
 #
-# Test 4 (ANOVA): Monetary value differs sharply across Frequency quartiles
-# (Welch F(3, 2901) = 2452, p < .001, eta-sq = 0.615), and every pairwise
-# Games-Howell comparison is significant. This effect size is very large
-# because Frequency and Monetary are correlated by construction (more orders
-# mechanically tends toward more spend) - the same redundancy flagged by the
-# VIF check in notebook 03's predictive_modelling. This test confirms the
-# segments are statistically distinguishable, but it should not be read as
-# an independent discovery given that known correlation.
+# Test 4 (ANOVA): originally grouped by Frequency quartile, which produced
+# a huge but close-to-meaningless effect size (eta-sq = 0.615) because
+# Monetary = Frequency x AvgBasketValue by construction - testing whether
+# Monetary differs by Frequency quartile is close to circular. Redone by
+# acquisition-year cohort (2009: n=951, 2010: n=3364, 2011: n=938) instead,
+# which is independent of how Monetary is computed: Welch F(2, 1843) = 420,
+# p < .001, eta-sq = 0.146 - a genuine, moderate effect, not a construction
+# artefact. Every pairwise Games-Howell comparison is significant and
+# monotonic: log(Monetary) is highest for the 2009 cohort, lower for 2010
+# (estimate -1.06, 95% CI [-1.18, -0.94]), lower again for 2011 (-1.70 vs
+# 2009; -0.65 vs 2010).
+#
+# Honest confound to state alongside this: Monetary is a running total, not
+# a rate, so an earlier acquisition cohort has simply had more calendar
+# time to accumulate spend - the 2011 cohort is also right-censored at the
+# 9 Sep 2011 cutoff, with at most ~9 months of history. Part of this effect
+# is genuinely "customers acquired in 2009 turned out more valuable" and
+# part is mechanically "customers acquired in 2009 have had 21 more months
+# to spend than the 2011 cohort" - the two are not separated by this test.
+# A tenure-normalised measure (e.g. Monetary / TenureDays, a spend rate)
+# would isolate the first from the second and is worth flagging as a
+# refinement for the final report rather than presenting this result as a
+# clean, unconfounded acquisition-cohort effect.
 #
 # Recommendation: report Cramer's V and eta-squared alongside every p-value
 # in the final write-up - Test 2 is the clearest example in this project of
