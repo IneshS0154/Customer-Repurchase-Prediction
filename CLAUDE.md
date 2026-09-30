@@ -30,7 +30,7 @@ pip install -r requirements.txt
 source("packages.R")
 ```
 ```bash
-# Re-download the raw dataset if data/raw/ is empty (gitignored, ~45MB)
+# Re-download the raw dataset if data/raw/ is empty (~45MB)
 curl -L -o data/raw/online_retail_ii.zip "https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip"
 cd data/raw && unzip -o online_retail_ii.zip
 ```
@@ -47,10 +47,25 @@ There is no test suite, linter, or build step — this is an analysis project.
 
 ## Architecture
 
-**Data flow:** `data/raw/` (raw UCI xlsx, gitignored) → cleaning (`src/cleaning.py` for
-Python notebooks, `R/cleaning.R` for R scripts — same logic, ported and verified to
-produce identical results) → feature engineering (`src/features.py` / `R/features.R`) →
-`data/processed/*.csv` (gitignored) → consumed independently by each notebook/script.
+**Data flow:** `data/raw/online_retail_II.xlsx` → `src/cleaning.py::clean_invoice_lines`
+→ **extra inline cleaning in cell 8 of `00_data_cleaning.ipynb`** → `src/features.py::build_customer_table`
+→ `data/processed/invoice_lines_clean.csv` + `customer_table.csv` → read by every other
+notebook *and* by the R scripts. The R scripts do not re-clean. They `read.csv()` the
+Python outputs and `source("R/features.R")` only for `CUTOFF_DATE`. `R/cleaning.R` is a
+port that no current script calls.
+
+**The cleaning rules live in two places.** `src/cleaning.py` does the base pass
+(price ≤ 0, a short `NON_PRODUCT_CODES` set, exact duplicates). Notebook 00 cell 8 then
+removes a longer non-product set (adds `S`, `B`, `ADJUST`, `CRUK`, `TEST001/002`,
+`GIFT_*` vouchers) and the mistaken-order invoices (`581483`/`C581484`, `541431`/`C541433`,
+`556444`). The processed CSVs reflect both passes. `R/cleaning.R`'s list is a third,
+different set. If you change a cleaning rule, change it in notebook 00 (and `src/` if it
+belongs in the base pass), then re-run 00 so every downstream consumer picks it up.
+
+**Data files are committed despite `.gitignore`.** The raw xlsx/zip and both processed CSVs
+were added before the ignore rules and are still tracked. Don't stage changes to them
+unless the team means to update the shared data. Opening the xlsx in Excel and re-saving
+it shows up as a modification.
 
 **The cutoff-date design is the central mechanic of the whole project** (`src/features.py`
 and `R/features.R`, kept in sync): `CUTOFF_DATE = 2011-09-09`. Every customer-level feature
@@ -63,9 +78,9 @@ future-window data back into features.
 **`src/` and `R/` hold the only shared logic.** Everything else — statistics, modelling,
 plots — lives inline in each notebook/script per task, since each one corresponds to one
 graded task in the brief and should be independently readable/reviewable by teammates.
-Don't move analysis code into `src/`/`R/` unless it's genuinely reused. If you change the
-cleaning/feature logic in one language, check whether the same fix is needed in the other
-(e.g. `NON_PRODUCT_CODES` must match between `src/cleaning.py` and `R/cleaning.R`).
+Don't move analysis code into `src/`/`R/` unless it's genuinely reused. If you change
+`CUTOFF_DATE`/`TARGET_WINDOW_DAYS` or feature logic, change both `src/features.py` and
+`R/features.R`.
 
 **Path depth matters for `notebooks/python/*.ipynb`:** they're two levels below the
 project root, so `sys.path.append('../..')` and `../../data/...` (not `../data/...`).
