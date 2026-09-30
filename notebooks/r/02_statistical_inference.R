@@ -63,25 +63,50 @@ cat("Cramer's V:", round(v_res$Cramers_v, 3),
     " 95% CI [", round(v_res$CI_low, 3), ",", round(v_res$CI_high, 3), "]\n")
 
 # ---- Test 3: Comparison of variances ---------------------------------------
-# H0: variance of AvgBasketValue is equal for UK and international customers
-# H1: the variances differ
+# Research question: is customer-level average order value more variable for
+# international customers than for UK customers?
 #
-# Levene's test, median-centred (the Brown-Forsythe variant), which is robust
-# to non-normality - the classic F-test of variances is not, and
-# AvgBasketValue is heavily skewed.
+# Outcome: AvgBasketValue = Monetary / Frequency (see R/features.R), i.e. each
+# customer's total pre-cutoff spend divided by their number of orders. It is
+# the customer-level average order value, not the value of any single order.
+#
+# H0: the variance of customer-level average order value is equal for UK and
+#     international customers
+# H1: the variance of customer-level average order value differs between UK
+#     and international customers (two-sided; the direction is read from the
+#     variance ratio, not tested one-sidedly)
+#
+# Test: Levene's test centred on the median (the Brown-Forsythe variant).
+# Appropriate because (1) average order value is a monetary amount and
+# heavily right-skewed (notebook 01), (2) the groups are very unequal in size
+# (about 10 UK customers per international customer), and (3) centring on
+# the median makes the test robust to non-normality and outliers, whereas the
+# classical F-test of variances is highly sensitive to both.
+#
+# Magnitude: variance ratio (International / UK) with a bootstrap 95% CI.
 
-cat("\n=== Test 3: Comparison of variances (Levene, median-centred) ===\n")
+cat("\n=== Test 3: Comparison of variances (Brown-Forsythe / median-centred Levene) ===\n")
+cat("Outcome: customer-level average order value (AvgBasketValue = Monetary / Frequency)\n\n")
 customers$IsUK_f <- factor(customers$IsUK, labels = c("International", "UK"))
+
+test3_desc <- customers %>% group_by(Group = IsUK_f) %>%
+  summarise(n = n(),
+            mean_avg_order_value = mean(AvgBasketValue),
+            sd = sd(AvgBasketValue),
+            variance = var(AvgBasketValue))
+cat("Customer-level average order value (GBP) by group:\n")
+print(as.data.frame(test3_desc), digits = 6, row.names = FALSE)
+
 lev_res <- leveneTest(AvgBasketValue ~ IsUK_f, data = customers, center = median)
 print(lev_res)
+cat(sprintf("Brown-Forsythe: F(%d, %d) = %.2f, p = %s\n",
+            lev_res$Df[1], lev_res$Df[2], lev_res$`F value`[1],
+            format.pval(lev_res$`Pr(>F)`[1], digits = 3, eps = 0.001)))
 
-var_by_group <- customers %>% group_by(IsUK_f) %>%
-  summarise(variance = var(AvgBasketValue), sd = sd(AvgBasketValue), n = n())
-print(var_by_group)
-
-vr_point <- var_by_group$variance[var_by_group$IsUK_f == "International"] /
-            var_by_group$variance[var_by_group$IsUK_f == "UK"]
-cat("Variance ratio (International / UK):", round(vr_point, 2), "\n")
+intl_vals <- customers$AvgBasketValue[customers$IsUK_f == "International"]
+uk_vals <- customers$AvgBasketValue[customers$IsUK_f == "UK"]
+vr_point <- var(intl_vals) / var(uk_vals)
+cat(sprintf("Variance ratio (International / UK) = %.2f\n", vr_point))
 
 # Bootstrap 95% CI for the variance ratio. A classical parametric CI (e.g.
 # from the F-distribution) assumes normality - the same assumption already
@@ -89,8 +114,6 @@ cat("Variance ratio (International / UK):", round(vr_point, 2), "\n")
 # using it here for the CI would be inconsistent. Resample each group
 # independently with replacement, recompute the ratio, and take percentiles.
 set.seed(42)
-intl_vals <- customers$AvgBasketValue[customers$IsUK_f == "International"]
-uk_vals <- customers$AvgBasketValue[customers$IsUK_f == "UK"]
 B <- 5000
 boot_ratios <- numeric(B)
 for (i in 1:B) {
@@ -99,52 +122,174 @@ for (i in 1:B) {
   boot_ratios[i] <- var(intl_bs) / var(uk_bs)
 }
 vr_ci <- quantile(boot_ratios, c(0.025, 0.975))
-cat("Bootstrap 95% CI for variance ratio (", B, "resamples):",
-    round(vr_ci[1], 2), "to", round(vr_ci[2], 2), "\n")
+cat(sprintf("Bootstrap 95%% CI for the variance ratio (%d resamples): [%.2f, %.2f]\n",
+            B, vr_ci[1], vr_ci[2]))
 
 # ---- Test 4: ANOVA ----------------------------------------------------------
-# H0: mean log(Monetary) is equal across acquisition-year cohorts
-# H1: at least one cohort differs
+# Research question: does customers' spending rate over their first 90 days
+# differ across acquisition-year cohorts?
 #
-# Originally grouped by Frequency quartile, but Monetary = Frequency x
-# AvgBasketValue by construction (see src/features.R / R/features.R), so
-# "does Monetary differ by Frequency quartile" is close to tautological -
-# of course customers who order more spend more, almost by definition, and
-# the resulting effect size mixes a real business signal with a mechanical
-# one. Acquisition cohort (the year the customer's first purchase falls in)
-# is independent of how Monetary is computed and answers a genuinely
-# separate business question: does historical customer value differ by
-# when the customer was acquired? That is directly useful for marketing
-# (e.g. "are recently-acquired customers worth less than older cohorts?").
+# Design history. Version 1 grouped log(Monetary) by Frequency quartile -
+# close to circular, because Monetary = Frequency x AvgBasketValue. Version 2
+# grouped log(Monetary) by acquisition cohort, but Monetary is a cumulative
+# pre-cutoff total, so earlier cohorts had more time to accumulate it
+# (tenure: 2009 cohort ~640 days, 2011 cohort ~138 days).
 #
-# Welch ANOVA (does not assume equal variances across groups) with
-# Games-Howell post-hoc pairwise comparisons. Kruskal-Wallis run alongside as
-# a non-parametric check.
+# Why not simply Monetary / TenureDays? Checked on the data before choosing:
+# 2 customers have TenureDays = 0 and 102 have < 30, so dividing by tenure
+# explodes the rate for very recent customers (one 1-day customer comes out
+# at GBP 1,462/day), and log(Monetary / TenureDays) is NEGATIVELY correlated
+# with log(TenureDays) (r = -0.24): it swaps the old bias (older cohorts
+# favoured) for the opposite one, because a recent customer's single first
+# order is divided by only a few days.
+#
+# Outcome used instead: SpendRate90 = spend in the customer's first 90 days
+# after their first purchase / 90 (GBP per day). Every customer is measured
+# over exactly the same 90-day exposure, so no customer's value depends on
+# how long ago they were acquired, and there is no small denominator.
+# Eligibility: customers with TenureDays >= 90, i.e. whose full 90-day window
+# ends before the cutoff (so no post-cutoff data is used). Customers
+# acquired < 90 days before the cutoff cannot be observed for 90 days and are
+# excluded - all from the 2011 cohort; the count is printed below.
+# Transformation: log(SpendRate90). Every eligible customer's window contains
+# their first order, so the rate is strictly positive and log() is defined
+# without the +1 offset of log1p (which would distort values in GBP/day).
+# The log is used because spend is heavily right-skewed; group differences on
+# the log scale back-transform to ratios of geometric means.
+#
+# H0: mean log(SpendRate90) is equal across acquisition-year cohorts
+# H1: at least one cohort's mean log(SpendRate90) differs
+#
+# Grouping: AcqCohort = calendar year of the first pre-cutoff purchase
+# (derivation from TenureDays verified against the invoice lines below).
+#
+# Test: Welch's one-way ANOVA, because cohort sizes are very unequal and
+# spending is heterogeneous across groups (checked with Brown-Forsythe
+# below); Welch's F does not assume equal variances. Games-Howell post-hoc
+# comparisons (unequal variances and n; adjusted p-values). Kruskal-Wallis on
+# the same outcome as a robustness check. Sensitivity analysis:
+# log(Monetary) on the same customers, to show what the cumulative measure
+# would have concluded.
+#
+# Effect size: omega-squared with a 95% CI. Omega-squared is less biased
+# than eta-squared in the population and is the same variance-explained
+# idea. Limitation: it is computed from the classical one-way ANOVA
+# decomposition, and its CI assumes equal variances - which Welch's test
+# itself does not. Read it as a descriptive magnitude alongside Welch's F.
 
-cat("\n=== Test 4: ANOVA (Welch, acquisition-year cohort) ===\n")
+cat("\n=== Test 4: ANOVA (Welch, first-90-day spending rate by acquisition-year cohort) ===\n")
+WINDOW_DAYS <- 90
 customers$FirstPurchase <- as.Date(CUTOFF_DATE) - customers$TenureDays
 customers$AcqCohort <- factor(format(customers$FirstPurchase, "%Y"))
-print(table(customers$AcqCohort))
-customers$log_monetary <- log(customers$Monetary)
 
-welch_res <- welch_anova_test(customers, log_monetary ~ AcqCohort)
-print(welch_res)
+# First 90 days of purchases per customer, from the cleaned invoice lines
+# (same definition as Monetary in R/features.R: non-cancelled, pre-cutoff).
+inv_lines <- read.csv("data/processed/invoice_lines_clean.csv")
+inv_lines$IsCancellation <- as.logical(inv_lines$IsCancellation)
+inv_lines$InvoiceDate <- as.POSIXct(inv_lines$InvoiceDate, tz = "UTC")
+purchases <- inv_lines %>%
+  filter(!is.na(CustomerID), !IsCancellation, InvoiceDate < CUTOFF_DATE) %>%
+  group_by(CustomerID) %>%
+  mutate(FirstPurchaseTime = min(InvoiceDate)) %>%
+  ungroup()
+first90 <- purchases %>%
+  filter(InvoiceDate < FirstPurchaseTime + WINDOW_DAYS * 86400) %>%
+  group_by(CustomerID) %>%
+  summarise(Spend90 = sum(LineRevenue),
+            FirstYear = format(first(FirstPurchaseTime), "%Y"), .groups = "drop")
+rm(inv_lines, purchases)
 
-eta_res <- eta_squared(aov(log_monetary ~ AcqCohort, data = customers))
-cat("Eta-squared:", round(eta_res$Eta2[1], 4), "\n")
+customers <- customers %>% left_join(first90, by = "CustomerID")
+stopifnot(all(customers$FirstYear == as.character(customers$AcqCohort)))
+cat("Cohort check: AcqCohort (from TenureDays) matches first-purchase year in the invoice lines for all",
+    nrow(customers), "customers\n")
 
-gh_res <- games_howell_test(customers, log_monetary ~ AcqCohort)
-print(gh_res)
+cat("\nCustomers by cohort, and eligible for a full", WINDOW_DAYS, "day window (TenureDays >=", WINDOW_DAYS, "):\n")
+print(customers %>% group_by(AcqCohort) %>%
+        summarise(all = n(), eligible = sum(TenureDays >= WINDOW_DAYS),
+                  excluded = sum(TenureDays < WINDOW_DAYS), .groups = "drop") %>%
+        as.data.frame(), row.names = FALSE)
 
-kw_res <- kruskal.test(log_monetary ~ AcqCohort, data = customers)
-cat("Kruskal-Wallis robustness check: chi-sq =", round(kw_res$statistic, 2),
-    " df =", kw_res$parameter, " p =", format.pval(kw_res$p.value, digits = 3), "\n")
+t4 <- customers %>% filter(TenureDays >= WINDOW_DAYS) %>%
+  mutate(SpendRate90 = Spend90 / WINDOW_DAYS,
+         log_rate90 = log(SpendRate90),
+         log_monetary = log(Monetary))
+stopifnot(all(t4$SpendRate90 > 0))
+
+# Descriptive statistics and assumption diagnostics, per cohort.
+# skew_log: skewness of log(SpendRate90); outliers_log: |z| > 3 within cohort.
+skewness <- function(x) mean((x - mean(x))^3) / sd(x)^3
+cat("\nSpendRate90 (GBP/day) and log(SpendRate90) by cohort:\n")
+print(t4 %>% group_by(AcqCohort) %>%
+        summarise(n = n(),
+                  mean_rate = mean(SpendRate90), sd_rate = sd(SpendRate90),
+                  median_rate = median(SpendRate90),
+                  mean_log = mean(log_rate90), sd_log = sd(log_rate90),
+                  skew_log = skewness(log_rate90),
+                  outliers_log = sum(abs(log_rate90 - mean(log_rate90)) > 3 * sd(log_rate90)),
+                  .groups = "drop") %>%
+        as.data.frame(), digits = 4, row.names = FALSE)
+
+bf4 <- leveneTest(log_rate90 ~ AcqCohort, data = t4, center = median)
+cat(sprintf("Variance check (Brown-Forsythe on log(SpendRate90)): F(%d, %d) = %.2f, p = %s\n",
+            bf4$Df[1], bf4$Df[2], bf4$`F value`[1],
+            format.pval(bf4$`Pr(>F)`[1], digits = 3, eps = 0.001)))
+
+aov4 <- aov(log_rate90 ~ AcqCohort, data = t4)
+png("reports/figures/r_test4_diagnostics.png", width = 1200, height = 500, res = 120)
+par(mfrow = c(1, 2))
+boxplot(log_rate90 ~ AcqCohort, data = t4, xlab = "Acquisition cohort",
+        ylab = "log(first-90-day spend, GBP/day)", main = "Outcome by cohort")
+qqnorm(residuals(aov4), main = "Q-Q plot of ANOVA residuals"); qqline(residuals(aov4))
+invisible(dev.off())
+cat("Diagnostic plots written to reports/figures/r_test4_diagnostics.png\n")
+
+# Primary test
+welch_res <- welch_anova_test(t4, log_rate90 ~ AcqCohort)
+cat(sprintf("\nWelch ANOVA: F(%.0f, %.1f) = %.2f, p = %s\n",
+            welch_res$DFn, welch_res$DFd, welch_res$statistic,
+            format.pval(welch_res$p, digits = 3, eps = 0.001)))
+
+omega_res <- omega_squared(aov4, partial = FALSE, ci = 0.95, alternative = "two.sided")
+cat(sprintf("Omega-squared = %.3f, 95%% CI [%.3f, %.3f] (%s effect, Field 2013 rules)\n",
+            omega_res$Omega2[1], omega_res$CI_low[1], omega_res$CI_high[1],
+            interpret_omega_squared(omega_res$Omega2[1], rules = "field2013")))
+
+# Post-hoc: estimates are differences in mean log(SpendRate90);
+# exp(estimate) = ratio of geometric-mean spending rates (group2 / group1).
+gh_res <- games_howell_test(t4, log_rate90 ~ AcqCohort, conf.level = 0.95)
+cat("\nGames-Howell pairwise comparisons (log scale; ratio = exp(estimate), group2 / group1):\n")
+print(gh_res %>%
+        transmute(group1, group2, estimate = round(estimate, 3),
+                  conf.low = round(conf.low, 3), conf.high = round(conf.high, 3),
+                  ratio = round(exp(estimate), 2),
+                  ratio.low = round(exp(conf.low), 2), ratio.high = round(exp(conf.high), 2),
+                  p.adj = format.pval(p.adj, digits = 3, eps = 0.001), p.adj.signif) %>%
+        as.data.frame(), row.names = FALSE)
+
+# Robustness check: same outcome, rank-based
+kw_res <- kruskal.test(log_rate90 ~ AcqCohort, data = t4)
+kw_eff <- kruskal_effsize(t4, log_rate90 ~ AcqCohort)
+cat(sprintf("\nRobustness (Kruskal-Wallis): chi-sq(%d) = %.2f, p = %s, eta-squared[H] = %.3f (%s)\n",
+            kw_res$parameter, kw_res$statistic,
+            format.pval(kw_res$p.value, digits = 3, eps = 0.001),
+            kw_eff$effsize, kw_eff$magnitude))
+
+# Sensitivity: cumulative log(Monetary) on the same customers. Subject to the
+# exposure confounding described above - shown only for comparison.
+welch_mon <- welch_anova_test(t4, log_monetary ~ AcqCohort)
+omega_mon <- omega_squared(aov(log_monetary ~ AcqCohort, data = t4), partial = FALSE,
+                           ci = 0.95, alternative = "two.sided")
+cat(sprintf("Sensitivity (cumulative log(Monetary), exposure-confounded): Welch F(%.0f, %.1f) = %.2f, p = %s, omega-squared = %.3f [%.3f, %.3f]\n",
+            welch_mon$DFn, welch_mon$DFd, welch_mon$statistic,
+            format.pval(welch_mon$p, digits = 3, eps = 0.001),
+            omega_mon$Omega2[1], omega_mon$CI_low[1], omega_mon$CI_high[1]))
 
 # ---- Multiple comparisons note ----------------------------------------------
 # Four pre-planned tests answering four different client questions - not a
 # search through many comparisons, so Bonferroni across the four headline
 # tests is not applied (threshold would be 0.05/4 = 0.0125). Within Test 4's
-# six pairwise comparisons, Games-Howell already controls the family-wise
+# three pairwise comparisons, Games-Howell already controls the family-wise
 # error rate across that one family.
 cat("\n=== Multiple comparisons note ===\n")
 cat("Four pre-planned tests, four different questions: no Bonferroni across them.\n")
@@ -175,43 +320,84 @@ cat("\nDone.\n")
 # retention, but it is a weak signal on its own - not a strong enough lever
 # to justify major spend reallocation by itself.
 #
-# Test 3 (variances): International customers' basket values are far more
-# variable than UK customers' (variance ratio 5.24x, bootstrap 95% CI
-# [1.94, 13.39], 5000 resamples): Levene's F(1, 5251) = 123.9, p < .001.
-# The CI is wide and entirely above 1, so we can say with confidence the
-# true ratio exceeds 1 (international is more variable), but not pin down
-# the exact multiple - expected, given the international group is much
-# smaller (n = 457) than the UK group (n = 4796) and both are skewed.
-# Practical implication: a single average order value figure is much less
-# representative for international accounts - discount or credit policies
-# set from the average risk being wrong for many international customers
-# in either direction, and the width of the CI itself is a reason not to
-# over-commit to the specific 5.24x figure in the final report.
+# Test 3 (variances): outcome is customer-level average order value
+# (Monetary / Frequency). International customers: n = 457, mean GBP 664,
+# SD GBP 966, variance 933,840. UK customers: n = 4796, mean GBP 334,
+# SD GBP 422, variance 178,201. Brown-Forsythe (median-centred Levene):
+# F(1, 5251) = 123.94, p < .001, so H0 of equal variances is rejected.
+# Variance ratio (International / UK) = 5.24, bootstrap 95% CI for the
+# variance ratio [1.94, 13.39] (5000 resamples). The confidence interval lies
+# entirely above 1, providing evidence that international customers have
+# greater variability in customer-level average order value than UK
+# customers. The interval is wide, so the size of the difference is
+# uncertain: 5.24 is a point estimate, not a known multiple - expected given
+# the much smaller international group and the skewed outcome.
+# Practical implication: international customers show substantially greater
+# dispersion in average order value, so a single average-value figure is
+# likely to be less representative for international accounts than for UK
+# accounts. This suggests segmenting international customers (e.g. by order
+# size) or considering differentiated commercial approaches may be worth
+# investigating. The test shows a difference in spread only - it does not
+# explain why it exists or show that any particular pricing, discount or
+# credit policy would change revenue.
 #
-# Test 4 (ANOVA): originally grouped by Frequency quartile, which produced
-# a huge but close-to-meaningless effect size (eta-sq = 0.615) because
-# Monetary = Frequency x AvgBasketValue by construction - testing whether
-# Monetary differs by Frequency quartile is close to circular. Redone by
-# acquisition-year cohort (2009: n=951, 2010: n=3364, 2011: n=938) instead,
-# which is independent of how Monetary is computed: Welch F(2, 1843) = 420,
-# p < .001, eta-sq = 0.146 - a genuine, moderate effect, not a construction
-# artefact. Every pairwise Games-Howell comparison is significant and
-# monotonic: log(Monetary) is highest for the 2009 cohort, lower for 2010
-# (estimate -1.06, 95% CI [-1.18, -0.94]), lower again for 2011 (-1.70 vs
-# 2009; -0.65 vs 2010).
+# Test 4 (ANOVA): outcome is log(SpendRate90), each customer's spend in the
+# first 90 days after their first purchase, per day - the same exposure for
+# every customer. Eligible customers: 2009 n = 951, 2010 n = 3364, 2011
+# n = 636 (302 customers acquired < 90 days before the cutoff excluded, all
+# 2011). Median first-90-day spend rate: GBP 6.30/day (2009), 4.29 (2010),
+# 3.84 (2011). Variances differ (Brown-Forsythe F(2, 4948) = 23.91,
+# p < .001), supporting Welch over classical ANOVA.
 #
-# Honest confound to state alongside this: Monetary is a running total, not
-# a rate, so an earlier acquisition cohort has simply had more calendar
-# time to accumulate spend - the 2011 cohort is also right-censored at the
-# 9 Sep 2011 cutoff, with at most ~9 months of history. Part of this effect
-# is genuinely "customers acquired in 2009 turned out more valuable" and
-# part is mechanically "customers acquired in 2009 have had 21 more months
-# to spend than the 2011 cohort" - the two are not separated by this test.
-# A tenure-normalised measure (e.g. Monetary / TenureDays, a spend rate)
-# would isolate the first from the second and is worth flagging as a
-# refinement for the final report rather than presenting this result as a
-# clean, unconfounded acquisition-cohort effect.
+# Welch F(2, 1343.7) = 45.11, p < .001: H0 is rejected - mean log spending
+# rate differs across cohorts. But the effect is SMALL: omega-squared =
+# 0.022, 95% CI [0.014, 0.030] - cohort accounts for roughly 2% of the
+# variation in log spending rate. Games-Howell: the 2009 cohort's
+# geometric-mean spending rate is higher than 2010's (2010 / 2009 ratio 0.69,
+# 95% CI [0.62, 0.76], adj. p < .001) and 2011's (ratio 0.63, [0.55, 0.72],
+# adj. p < .001); 2010 and 2011 do not differ significantly (ratio 0.92,
+# [0.83, 1.02], adj. p = 0.157). Kruskal-Wallis agrees (chi-sq(2) = 91.39,
+# p < .001, eta-squared[H] = 0.018, small), so the conclusion does not
+# depend on the normality of the log outcome (residual Q-Q plot: roughly
+# symmetric, heavier tails than normal - r_test4_diagnostics.png).
 #
-# Recommendation: report Cramer's V and eta-squared alongside every p-value
+# Sensitivity - what the cumulative measure would have said: on the same
+# customers, log(Monetary) gives Welch F(2, 1411.0) = 317.88 and
+# omega-squared = 0.126 [0.109, 0.143], about six times the effect size.
+# Most of the cohort difference in cumulative spend is therefore explained
+# by older cohorts having had longer to accumulate it, not by a higher
+# spending rate. This contrast is the main reason Test 4 was redesigned.
+#
+# Interpretation: acquisition cohort is associated with a small difference
+# in early spending rate, and it is driven by the 2009 group alone. The data
+# start on 1 Dec 2009, so the "2009 cohort" is every customer active in
+# December 2009 - it includes established accounts acquired before the data
+# begin (left-censoring), and its "first 90 days" are only its first 90 days
+# in the data. The higher 2009 rate is therefore at least partly
+# "already-established customers spend faster", not "customers acquired in
+# 2009 are better". Among customers genuinely first seen in the data (2010
+# vs 2011) there is no significant difference.
+#
+# Practical implication: there is no evidence that recently acquired
+# customers are spending at a lower rate in their first 90 days than the
+# 2010 cohort did, so this test gives no reason to change acquisition
+# strategy by period. Established accounts spend faster, which supports
+# prioritising their retention (links to Task 5), but the effect is small
+# and cohort alone is a weak basis for segmentation.
+#
+# Limitations: (1) tenure normalisation reduces the mechanical advantage of
+# earlier cohorts caused by having more time to accumulate spending, but it
+# does not eliminate all cohort-related confounding; (2) the 2009 cohort is
+# left-censored (see above); (3) the 2011 cohort is right-censored - only
+# customers acquired Jan to early Jun 2011 can be observed for 90 days, so
+# it is not representative of the whole 2011 intake; (4) seasonality: the
+# 90-day windows fall in different seasons (e.g. December 2009 starts in the
+# pre-Christmas period), and acquisition month is not controlled; (5) the
+# data are observational - cohort is associated with spending rate, not a
+# cause of it; (6) omega-squared and its CI come from the classical ANOVA
+# decomposition, which assumes equal variances.
+#
+# Recommendation: report the effect size (Cohen's d, Cramer's V, variance
+# ratio, omega-squared) alongside every p-value
 # in the final write-up - Test 2 is the clearest example in this project of
 # where statistical and practical significance diverge.
