@@ -1,6 +1,6 @@
 ---
 title: "Customer Repurchase and Value Prediction for a UK Online Retailer"
-subtitle: "Task 1 -- Understanding the Industry Problem & Task 2 -- Research Landscape"
+subtitle: "Task 1 -- Understanding the Industry Problem, Dataset Selection & Task 2 -- Research Landscape"
 author: "IT3081 Statistical Modelling -- Group Consultancy Report"
 date: "\today"
 ---
@@ -22,7 +22,7 @@ bulk for resale. This distinction matters: transaction volumes per order are hig
 consumer retail (median basket value of approximately **£275**), and purchasing behaviour is
 driven by *stock-replenishment* cycles rather than impulse buying.
 
-Geographically, the business is overwhelmingly UK-concentrated: **85.5% of total revenue**
+Geographically, the business is overwhelmingly UK-concentrated: **85.3% of total revenue**
 and approximately **91% of customers** are based in the United Kingdom. The remaining
 revenue is distributed across roughly 40 other countries, with Ireland (EIRE), the
 Netherlands, Germany, France, and Australia representing the largest international markets.
@@ -34,13 +34,13 @@ on comparatively thin margins relative to the size of individual transactions. T
 features of the business are critical to understanding the problem:
 
 - **Seasonality.** Revenue is strongly concentrated around Q4, with **November revenue
-  roughly double** that of a typical month, driven by retailers stocking up ahead of the
-  Christmas selling season. This pattern repeats consistently across both years of
-  available data (November 2010 and November 2011 both show comparable peaks).
-- **Operational rhythm.** The business takes **no orders on Saturdays**, reflecting either a
-  B2B ordering pattern (retail buyers ordering during their own business hours) or an
-  operational choice by the wholesaler. Order volume peaks between 10:00 and 15:00 on
-  weekdays.
+  roughly 2.2 times** that of a typical off-peak month, driven by retailers stocking up ahead
+  of the Christmas selling season. This pattern repeats across both years of available data
+  (November 2010 and November 2011 both show comparable peaks).
+- **Operational rhythm.** The business takes **almost no orders on Saturdays** (0.1% of
+  revenue), reflecting either a B2B ordering pattern (retail buyers ordering during their own
+  business hours) or an operational choice by the wholesaler. Order volume peaks between 10:00
+  and 15:00 on weekdays.
 
 ## 1.3 Description of the Business Problem
 
@@ -51,17 +51,18 @@ customers are likely to stop purchasing.**
 Quantitatively, from our descriptive analysis of the customer-level data (5,253 identified
 customers after data cleaning):
 
-- The **top 1% of customers generate 31.9%** of total identifiable revenue.
-- The **top 10% of customers generate 63.9%** of total identifiable revenue.
-- The **top 20% of customers generate 77.2%** of total identifiable revenue.
+- The **top 1% of customers generate 30.8%** of total identifiable revenue.
+- The **top 10% of customers generate 62.7%** of total identifiable revenue.
+- The **top 20% of customers generate 76.4%** of total identifiable revenue.
 
 This is a textbook Pareto (80/20) distribution of customer value, and it means the
 business's income is **structurally exposed to the loss of a small number of high-value
 buyers**. Compounding this exposure, our analysis of a 90-day forward-looking window shows
-that **43.3% of customers did not make a repeat purchase**. Non-repurchase is not a rare
-edge case for this business -- it affects nearly half of the customer base -- yet there is
-currently no mechanism to flag at-risk customers before they are lost, nor any evidence-based
-way to decide how much retention spend a given customer relationship justifies.
+that only **43.4% of customers made a repeat purchase -- 56.6% did not**. Non-repurchase is
+not a rare edge case for this business -- it affects more than half of the customer base --
+yet there is currently no mechanism to flag at-risk customers before they are lost, nor any
+evidence-based way to decide how much retention spend a given customer relationship
+justifies.
 
 ## 1.4 Importance of Solving the Problem
 
@@ -112,95 +113,323 @@ analytical task in this report:
    against real-world constraints identified through literature and industry expert
    feedback (Tasks 10--12).
 
+## 1.8 Dataset Selection and Justification
+
+**Dataset.** Chen, D. (2012). *Online Retail II* [Dataset]. UCI Machine Learning Repository.
+https://doi.org/10.24432/C5CG6D
+
+The dataset is the full transaction log of a UK-based, non-store online gift wholesaler. It
+was released by the same research group that first analysed its predecessor for RFM-based
+customer segmentation (Chen, Sain & Guo, 2012), so the business context is documented in
+peer-reviewed literature rather than assumed.
+
+| Brief requirement (§6) | How Online Retail II meets it |
+|---|---|
+| **Directly addresses the business problem** | It records *who* bought *what*, *when*, and for *how much*, for every order over two years. Repurchase and future spend -- the two outcomes the client cares about -- can be observed directly by splitting the timeline at a cutoff date (9 Sep 2011) and looking at the following 90 days. This mirrors the calibration/holdout design used throughout the customer-base-analysis literature (Schmittlein, Morrison & Colombo, 1987; Fader, Hardie & Lee, 2005b). |
+| **Sufficient observations** | 1,067,371 raw invoice lines; after cleaning, 1,021,252 lines, 46,919 invoices, 4,739 products, 43 countries. The customer-level modelling table has **5,253 customers**, of whom 43.4% repurchased -- a balanced outcome with roughly 2,280 positive cases, far above the usual events-per-variable guidance for a 9-predictor logistic model. |
+| **Variables for descriptive, inferential and predictive analysis** | The 8 raw columns support RFM feature construction (Recency, Frequency, Monetary), tenure, basket value, product breadth, cancellation rate and country. These give continuous, binary and categorical variables -- enough for comparisons of means, proportions and variances, ANOVA (Task 4), classification and regression (Task 5), PCA (Task 7), hierarchical models across 41 countries (Task 8), and a two-year daily/weekly revenue series (Task 9). |
+| **Publicly accessible** | Free download from the UCI repository under a CC BY 4.0 licence; no registration or data-sharing agreement needed, so every result in this report is reproducible. |
+| **Properly referenced** | Cited above with its DOI, alongside the original peer-reviewed study that introduced the data (Chen et al., 2012). |
+
+**Why this dataset over alternatives.** Most public churn datasets (e.g. telecom
+subscription data) are *contractual*: churn is observed when a contract ends. Our client is
+*non-contractual* -- a wholesale customer never "cancels", they simply stop ordering -- and
+this setting is both harder and less studied in B2B contexts (Tamaddoni Jahromi, Stakhovych &
+Ewing, 2014; Gattermann-Itschert & Thonemann, 2022). Online Retail II is one of very few public
+datasets that capture that setting at the transaction level, and it has been used in recent
+peer-reviewed repurchase-prediction research on online retailing (Chou et al., 2022).
+
+**Known limitations** (stated here so they are not discovered in the viva):
+
+- **No cost or margin data.** Profit-based evaluation (Task 5) must use assumed margin and
+  offer-cost figures, to be validated with the industry expert (Task 11).
+- **No marketing-contact or customer-demographic data.** Gattermann-Itschert & Thonemann
+  (2022) found that contact-related features (e.g. recency of last sales-rep contact) matter
+  beyond RFM in B2B churn; we cannot use them.
+- **22% of lines have no Customer ID**, and this missingness is not random (notebook 01), so
+  the customer-level models under-represent some order types.
+- **Only two years of history**, which limits seasonal time-series modelling (Task 9).
+- **No record of whether any retention offer was ever made**, so causal effects of an offer
+  cannot be estimated from this data alone -- the reason Task 6 proposes an experiment.
+
 ---
 
 # Task 2 -- Research Landscape
 
 ## 2.1 Structure of the Review
 
-This literature review is organised around four themes that map directly onto the
-statistical methods applied in this consultancy project:
+The review is organised around the decisions this project had to make. For each approach
+we took, it identifies the research that supports it; for each approach we considered and
+dropped, it identifies the research that explains why. It covers:
 
-1. **RFM segmentation** -- the descriptive/feature-engineering foundation of our
-   customer-level model (Task 3).
-2. **Churn and repurchase prediction** -- directly supports our binary classification
-   model (Task 5).
-3. **Customer lifetime value (CLV) modelling** -- supports our continuous spend-prediction
-   model and Bayesian discussion (Tasks 5 and 8).
-4. **Methods: penalised regression, Bayesian approaches, and experimental design** --
-   supports the modelling and critical-evaluation tasks (Tasks 5, 6, 7, 8).
+1. **Current industry practice** in customer retention (§2.2).
+2. **Existing statistical approaches** to repurchase and churn prediction, with their
+   strengths and weaknesses (§2.3).
+3. **Recent research findings**, 2021 onwards (§2.4).
+4. A **critical comparison table** of the core domain studies (§2.5).
+5. **Research gaps** (§2.6).
+6. A **decision-by-decision justification** of our analytical approach (§2.7).
 
-## 2.2 Anchor Papers
+All 45 references in §2.9 (44 papers plus the dataset) were checked against the Crossref and DataCite DOI registries
+(authors, year, journal, volume, pages, DOI). Claims attributed to each paper are limited to
+what its published abstract or well-established content states.
 
-The following nine papers anchor the review and were identified as directly relevant to
-the methods used in this project. **Each citation must be independently verified
-(author names, year, journal/venue, and DOI) before inclusion in the final report** -- the
-assignment brief treats fabricated or unverified citations as a serious academic integrity
-violation, and this list should be treated as a starting point for verification, not as a
-final bibliography.
+## 2.2 Current Industry Practices
 
-| Author (Year) | Journal / Venue | Relevance to This Project |
+**RFM segmentation is the default starting point.** Firms without a data-science function
+typically segment customers by Recency, Frequency and Monetary value and target segments by
+rule. Chen, Sain and Guo (2012) -- the original study on this dataset -- did exactly this,
+clustering customers with k-means on RFM variables and profiling segments with decision
+trees, explicitly to help a small online retailer that "lacks the necessary knowledge and
+expertise" adopt customer-centric marketing. Fader, Hardie and Lee (2005a) show that RFM is
+more than a heuristic: under a formal probability model, recency and frequency together
+determine a customer's expected future value, which they visualise as "iso-value curves".
+
+**Managerial heuristics decide who gets contacted.** In practice, retention campaigns are
+often targeted by simple rules such as "contact customers who have not ordered recently".
+Tamaddoni Jahromi et al. (2014) compare model-driven targeting against such managerial
+heuristics in a non-contractual B2B setting and find the model-driven approach
+outperforms them.
+
+**Churn scoring followed by targeting the highest-risk customers** is the dominant
+model-based practice (Neslin et al., 2006; Gattermann-Itschert & Thonemann, 2022). The
+recent field study by Gattermann-Itschert and Thonemann (2022), run at a B2B wholesaler,
+found that contacting the customers with the highest predicted churn probabilities
+significantly reduced churn compared with random targeting.
+
+## 2.3 Existing Statistical Approaches
+
+| Family | Representative studies | Strengths | Weaknesses |
+|---|---|---|---|
+| **Probabilistic "buy-till-you-die" (BTYD) models** (Pareto/NBD, BG/NBD, BG/BB) | Schmittlein et al. (1987); Fader et al. (2005a, 2005b); Abe (2009) | Built for non-contractual settings; parsimonious (need only recency, frequency, tenure); strong behavioural story; produce customer lifetime value directly. | Use few inputs, so cannot exploit other features (cancellations, product breadth, country); rely on distributional assumptions (Poisson purchasing, memoryless dropout). |
+| **Regression / GLM classifiers** (logistic regression, penalised regression) | Neslin et al. (2006); De Caigny, Coussement & De Bock (2018); Chou et al. (2022) | Interpretable coefficients (odds ratios); well-calibrated probabilities; penalised versions (LASSO, elastic net) handle correlated predictors and select variables (Tibshirani, 1996; Zou & Hastie, 2005). | Assume a linear relationship with the log-odds; may miss interactions that tree-based models capture. |
+| **Machine-learning classifiers** (SVM, boosting, random forests, neural networks) | Tamaddoni Jahromi et al. (2014) (boosting); Gordini & Veglio (2017) (SVM); Gattermann-Itschert & Thonemann (2022) (random forests) | Flexible; can capture non-linearities and interactions; often competitive or best on ranking metrics. | Harder to explain to managers; probabilities often poorly calibrated without post-processing (Niculescu-Mizil & Caruana, 2005); need tuning. |
+| **Profit-driven evaluation** | Verbeke et al. (2012); Verbraken, Verbeke & Baesens (2013) | Choose the model -- and the fraction of customers to contact -- that maximises campaign profit, not a statistical score. | Require cost and benefit parameters that firms often cannot state precisely. |
+| **Causal / uplift targeting** | Ascarza (2018); Lemmens & Gupta (2020); Devriendt, Berrevoets & Verbeke (2021); Haupt & Lessmann (2022) | Target customers whose behaviour the offer will *change*, which is what actually generates profit. | Require data from randomised experiments (treated vs. control customers), which most firms -- including our client -- do not have. |
+
+## 2.4 Recent Research Findings (2021 onwards)
+
+- **Hybrid models beat either approach alone, and LASSO keeps them interpretable.** Chou et
+  al. (2022), using a large online-retailing dataset, found that feeding BG/BB predictions
+  into a high-dimensional LASSO regression significantly outperformed both BG/BB alone and
+  LASSO alone, and that the LASSO-based model "provides interpretability" by identifying the
+  most influential features among about 100 predictors.
+- **Churn prediction works in non-contractual B2B wholesale -- and so does acting on it.**
+  Gattermann-Itschert and Thonemann (2022) validated a churn model in a live field
+  experiment at a B2B wholesaler, and found that features beyond standard RFM (such as
+  recency of the last sales-rep contact) mattered.
+- **Predicting risk is not the same as predicting the effect of an offer.** Devriendt et
+  al. (2021) argue that uplift models, which estimate the *incremental* effect of a
+  retention action, are the better paradigm for retention decisions, and introduce a
+  profit-based measure (maximum profit uplift) to compare them with standard churn models.
+  Haupt and Lessmann (2022) extend profit-optimal targeting to the case where the cost of a
+  marketing action depends on the customer's response (e.g. a discount only costs money if
+  used).
+- **Simple benchmarks remain hard to beat in retail forecasting.** Fildes, Ma and Kolassa
+  (2022) review retail forecasting and highlight "the dimensionality problem of too many
+  variables and too little data". The M5 competition (Makridakis, Spiliotis &
+  Assimakopoulos, 2022), based on Walmart sales, is the largest recent benchmark of retail
+  forecasting methods.
+
+## 2.5 Critical Comparison of Core Studies
+
+| Study | Setting / data | Method | Evaluation | Strengths | Weaknesses / gap | Used in this project |
+|---|---|---|---|---|---|---|
+| Chen, Sain & Guo (2012) | UK online gift retailer (this dataset's predecessor) | RFM + k-means + decision tree | Segment profiles (descriptive) | Same business; accessible to non-experts | Descriptive only -- no prediction of future behaviour, no validation | Motivates our RFM features; we go further by *predicting* repurchase and spend |
+| Schmittlein, Morrison & Colombo (1987) | Theory of non-contractual customer bases | Pareto/NBD | Fit to holdout period | Defines the "is this customer still active?" problem when churn is unobserved | Only recency and frequency; strong distributional assumptions | Justifies defining repurchase in a fixed future window rather than a churn date |
+| Fader, Hardie & Lee (2005a) | CDNOW online music retailer | Pareto/NBD + gamma-gamma spend model, iso-value curves | Holdout tests | Formally links RFM to lifetime value | Spend and purchase processes assumed independent | Justifies RFM as predictors of future value, and modelling purchase and spend as two parts |
+| Neslin et al. (2006) | Telecom churn tournament, many teams | Logit, trees, others | Top-decile lift, Gini, validation on data 3 months later | Large, fair comparison of methods; models keep their accuracy over time | Contractual telecom setting | Justifies top-decile lift as a metric and a single calibration/validation time split |
+| Verbeke et al. (2012) | Telecom churn, multiple datasets | Many classifiers, profit-based metric | Maximum profit from contacting the optimal fraction of customers | Moves evaluation from accuracy to money | Contractual telecom setting | Basis for our expected-profit curve and "% of customers to contact" |
+| Verbraken, Verbeke & Baesens (2013) | Customer churn | Expected maximum profit (EMP) criterion | EMP | Formal cost-benefit framework; guides campaign size | Needs cost and benefit parameters | Same; our profit parameters are placeholders to be validated in Task 11 |
+| Tamaddoni Jahromi, Stakhovych & Ewing (2014) | Non-contractual **B2B** | Several data-mining models; boosting best | Prediction of true churners, campaign profit | Closest setting to our client; beats managerial heuristics | Boosting is a black box | Justifies our "contact the most recent customers" heuristic benchmark |
+| Gordini & Veglio (2017) | B2B e-commerce | SVM with AUC-based parameter selection | AUC | B2B e-commerce setting | SVM gives no interpretable coefficients or calibrated probabilities | Considered and **dropped** (see §2.7) |
+| De Caigny, Coussement & De Bock (2018) | Customer churn, multiple datasets | Hybrid of logistic regression and decision trees | Predictive performance and comprehensibility | Shows logistic regression remains a strong, comprehensible base | Hybrid model is more complex to deploy | Supports logistic regression as our base model |
+| Chou et al. (2022) | Large online retailer | BG/BB + LASSO | Repurchase prediction accuracy | Recent; online retail; LASSO chosen for interpretability | Did not evaluate calibration or profit | Justifies LASSO; BG/BB integration listed as future work |
+| Gattermann-Itschert & Thonemann (2022) | Non-contractual B2B wholesaler, field experiment | Random forest | Churn reduction in a live experiment vs random targeting | Only study here with a real field test in our setting | Random forest less interpretable; needs CRM contact data we lack | Confirms RFM features matter in B2B wholesale; supports proposed experiment (Task 6) |
+| Ascarza (2018) | Two field experiments | Machine learning + randomised trials | Retention achieved by different targeting rules | Shows highest-risk customers are *not necessarily* the best to target | Needs experimental data | States the main limitation of our approach; motivates Task 6 |
+| Lemmens & Gupta (2020) | Retention campaigns | Causal machine learning | Campaign profit | Optimises profit directly | Needs experimental data | Future direction once an experiment has run |
+| Devriendt, Berrevoets & Verbeke (2021) | Customer churn | Uplift vs predictive models | Maximum profit uplift | Recent, profit-based comparison of the two paradigms | Needs treatment/control data | Same |
+| Haupt & Lessmann (2022) | Marketing campaigns | Causal hurdle model | Campaign profit | Handles costs that depend on the customer's response | Needs experimental data | Informs how offer cost should be modelled once real costs are known |
+
+**What the comparison shows.** The studies split along two lines. *First*, interpretable
+statistical models (logistic, LASSO, BTYD) versus flexible machine learning (SVM, boosting,
+random forests): the machine-learning studies often report the best ranking performance,
+but the interpretable models are competitive (De Caigny et al., 2018; Chou et al., 2022) and
+are the only ones whose outputs a marketing team can act on and audit. *Second*,
+risk-based versus effect-based targeting: almost all prediction studies rank customers by
+risk, while the experimental studies (Ascarza, 2018; Devriendt et al., 2021) show that risk
+is not the same as responsiveness to an offer. Only one study in our setting,
+Gattermann-Itschert and Thonemann (2022), closes the loop with a real field test.
+
+## 2.6 Research Gaps
+
+1. **Evaluation is usually accuracy-only.** Most churn and repurchase studies report AUC or
+   accuracy. Few also check whether predicted probabilities are *calibrated* -- whether a
+   "30% chance" really means 30% -- even though any profit calculation multiplies by those
+   probabilities (Van Calster et al., 2019). Profit-based evaluation exists (Verbeke et al.,
+   2012; Verbraken et al., 2013) but is rarely combined with calibration and interpretability
+   in the same study.
+2. **Non-contractual B2B settings are under-studied** compared with contractual consumer
+   churn (Tamaddoni Jahromi et al., 2014; Gattermann-Itschert & Thonemann, 2022).
+3. **Future spend is often ignored.** Most churn models predict *whether* a customer leaves,
+   not *how much* they would spend if they stay, even though value, not headcount, drives
+   retention budgets (Fader et al., 2005a).
+4. **Few studies compare several variable-selection methods on the same business data** --
+   stepwise, best subset and penalised regression are usually used one at a time, although
+   the statistical literature shows none of them dominates in general (Hastie, Tibshirani &
+   Tibshirani, 2020).
+
+**How this project addresses them.** We evaluate every repurchase model on discrimination
+(AUC), calibration (Brier score, calibration curve), top-decile lift *and* expected profit;
+we study a non-contractual B2B wholesaler; we model both repurchase and future spend and
+combine them into expected value; and we compare seven variable-selection and penalisation
+strategies on the same split.
+
+## 2.7 Justification for Our Analytical Approach
+
+Each row is a decision taken in the project, the research that supports it, and what we
+chose *not* to do as a result.
+
+### Problem set-up and data (Tasks 1, 3)
+
+| Decision | Research support | What we dropped, and why |
 |---|---|---|
-| Chen, Sain & Guo (2012) | *Journal of Database Marketing & Customer Strategy Management* | Original study using this exact dataset (Online Retail II / its predecessor) -- directly justifies our dataset selection. |
-| Fader, Hardie & Lee (2005), "Counting Your Customers the Easy Way" | *Marketing Science* | Introduces the BG/NBD probabilistic model, the industry-standard approach to CLV -- cited in our Bayesian methods discussion (Task 8). |
-| Neslin et al. (2006), "Defection Detection" | *Journal of Marketing Research* | Foundational churn-prediction methodology paper. |
-| Gupta et al. (2006), "Modeling Customer Lifetime Value" | *Journal of Service Research* | Survey of CLV modelling approaches. |
-| Verbeke et al. (2012) | *European Journal of Operational Research* | Profit-driven evaluation of churn models -- directly supports our expected-profit metric in Task 5. |
-| Tibshirani (1996) | *Journal of the Royal Statistical Society: Series B* | Introduces LASSO regression -- cited when justifying our penalised logistic regression choice in Task 5. |
-| Zou & Hastie (2005) | *Journal of the Royal Statistical Society: Series B* | Introduces elastic net regression. |
-| Jolliffe & Cadima (2016) | *Philosophical Transactions of the Royal Society A* | Modern review of Principal Component Analysis -- cited in our critical evaluation of PCA (Task 7). |
-| Kohavi et al. (2009) | *Data Mining and Knowledge Discovery* | Foundational paper on online controlled experiments -- cited in our critical evaluation of experimental design (Task 6). |
+| Define the target as "repurchase within 90 days after a cutoff", with features from before the cutoff | In non-contractual settings a customer's departure is never observed, so activity must be inferred from purchases in a defined window (Schmittlein et al., 1987); calibration/holdout splits are the standard validation design (Fader et al., 2005b), and churn models retain accuracy when applied to data three months later (Neslin et al., 2006) | A "churn date" target -- it does not exist for a wholesaler whose customers never formally cancel |
+| Use RFM plus tenure, basket value, product breadth, cancellation rate, country and acquisition quarter as features | RFM formally determines future customer value (Fader et al., 2005a); RFM is the established segmentation basis for this very business (Chen et al., 2012); RFM features are among the most important in B2B wholesale churn (Gattermann-Itschert & Thonemann, 2022) | Using RFM alone -- the extra features are cheap to build and the B2B literature shows non-RFM features add information |
+| Test whether missing Customer IDs are random before deciding how to treat them | Rubin (1976) defines when missingness can be ignored; Little (1988) gives the formal test of "missing completely at random" | Silently dropping or imputing the 22% of rows without an ID -- our tests showed the missingness is *not* random |
 
-## 2.3 Meeting the Minimum Requirements
+### Statistical inference (Task 4)
 
-The assignment brief requires:
+| Decision | Research support | What we dropped, and why |
+|---|---|---|
+| Welch's t-test for comparing means | Welch's test controls false positives better when variances differ and loses little when they are equal, so it should be the default (Delacre, Lakens & Leys, 2017) | Student's t-test -- it assumes equal variances, which Test 3 shows do not hold |
+| Brown-Forsythe (median-centred Levene) test for comparing variances | Robust to non-normal data (Brown & Forsythe, 1974) | The classical F-test of variances -- very sensitive to non-normality, and basket values are heavily skewed |
+| Welch ANOVA with Games-Howell post-hoc tests | Classical ANOVA can be severely biased under unequal variances; Welch's F is recommended by default (Delacre, Leys, Mora & Lakens, 2019) | Classical one-way ANOVA |
+| Report effect sizes (Cohen's d, Cramér's V, eta-squared) with every p-value | With very large samples p-values shrink towards zero even for trivial effects (Lin, Lucas & Shmueli, 2013); effect size, not p, shows practical importance (Sullivan & Feinn, 2012) | Reporting p-values alone -- with 5,253 customers, Test 2 is "significant" yet its effect is small (V = 0.09) |
 
-- [ ] Minimum **15 peer-reviewed research papers**
-- [ ] Minimum **10 journal papers**
-- [ ] At least **5 papers published within the last five years** (2021 or later)
+### Predictive modelling (Task 5)
 
-The nine anchor papers above cover the methodological foundation but do not, on their own,
-satisfy these minimums (notably, none are from the last five years). Additional papers
-should be sourced via targeted searches on Google Scholar, using queries such as:
+| Decision | Research support | What we dropped, and why |
+|---|---|---|
+| Logistic regression as the base repurchase model | Logistic regression is a strong, comprehensible base in churn prediction (Neslin et al., 2006; De Caigny et al., 2018); its odds ratios can be explained to management | SVM (Gordini & Veglio, 2017) and boosting (Tamaddoni Jahromi et al., 2014) -- no interpretable coefficients, and their probabilities typically need recalibration before use in a profit rule (Niculescu-Mizil & Caruana, 2005) |
+| Penalised regression (LASSO, elastic net) as the recommended model | LASSO shrinks and selects variables (Tibshirani, 1996); elastic net handles groups of correlated predictors (Zou & Hastie, 2005); LASSO was chosen for interpretability in recent online-retail repurchase prediction (Chou et al., 2022) | The unpenalised model -- `log_Monetary` has VIF ≈ 200 because Monetary ≈ Frequency × AvgBasketValue, which makes its coefficients unstable |
+| Fit Ridge as a comparison | Ridge regression was introduced for exactly this problem of correlated ("non-orthogonal") predictors (Hoerl & Kennard, 1970) | Recommending Ridge -- it shrinks but never removes the redundant feature, so it keeps the collinearity instead of resolving it |
+| Fit forward/backward stepwise and best subset as comparisons, not as the final model | Neither best subset nor LASSO dominates in general; LASSO does better when the signal is noisy, best subset when it is strong (Hastie et al., 2020) | Stepwise as the final model -- it biases coefficients, ignores the multiple testing done during selection, and can pick unstable models (Whittingham et al., 2006; Smith, 2018) |
+| Evaluate with AUC, Brier score and a calibration curve, not accuracy alone | The Brier score measures the accuracy of probability forecasts (Brier, 1950); poorly calibrated models can mislead decisions (Van Calster et al., 2019) | Accuracy or AUC alone -- they ignore whether the probabilities can be trusted, and our profit rule multiplies by them |
+| Report top-decile lift and an expected-profit curve | Top-decile lift is a standard churn metric (Neslin et al., 2006); choose the model and campaign size that maximise profit (Verbeke et al., 2012; Verbraken et al., 2013) | Choosing the model on AUC -- all seven variants tie within 0.001 AUC |
+| Benchmark against a "most recent customers first" heuristic | Model-driven targeting should be shown to beat managerial heuristics (Tamaddoni Jahromi et al., 2014) | — |
+| Model spend on repurchasers only and multiply by P(repurchase) (a two-part model) | Future value splits naturally into whether a customer buys and how much they spend (Fader et al., 2005a) | A single spend model on all customers -- 57% of outcomes are exactly zero, which a Gamma GLM cannot model |
+| Compare OLS on log(spend) with a Gamma GLM (log link), and apply Duan's smearing to the OLS predictions | Which of the two is better depends on the data's skewness and variance pattern, so both should be tested (Manning & Mullahy, 2001); back-transforming a log model without a correction underestimates the mean, and the smearing estimate corrects it without assuming normality (Duan, 1983) | Picking one spend model on theory alone |
+| Do not use a probabilistic BTYD model as the main model | BTYD models are parsimonious but use only recency and frequency (Chou et al., 2022) | Dropped as the *main* model because it cannot use our other features; Chou et al. (2022) show BTYD predictions can be added *into* a LASSO model -- listed as future work |
 
-- `"customer churn e-commerce"`
-- `"customer lifetime value prediction" RFM`
-- `"RFM machine learning" retail segmentation`
-- `"profit-driven" churn prediction evaluation`
-- `"calibrated probabilities" customer prediction`
+### Critical evaluations (Tasks 6--9)
 
-Priority should be given to papers published in the last five years to satisfy the recency
-requirement, while continuing to draw on the anchor papers above for methodological
-grounding.
+| Decision | Research support | What we dropped, and why |
+|---|---|---|
+| **Task 6:** Recommend a randomised experiment before rolling out targeted offers | Randomised controlled experiments are the best design for establishing cause and effect, but need attention to power, sample size and variance reduction (Kohavi et al., 2009); the highest-risk customers are not necessarily the ones an offer helps (Ascarza, 2018); profit comes from the offer's incremental effect (Lemmens & Gupta, 2020; Devriendt et al., 2021) | Treating the repurchase model as proof that offers work -- it predicts who will return, not who an offer will change |
+| **Task 7:** Do not use PCA on the customer feature table; use it only on the sparse customer × product matrix | PCA reduces dimensionality while losing as little information as possible, and helps interpretation when data are large (Jolliffe & Cadima, 2016); in regression, low-variance components can still be the most predictive, so dropping them can lose signal (Jolliffe, 1982) | PCA on the 9-feature table -- no real compression, coefficients lose their business meaning, and LASSO already handles the collinearity |
+| **Task 8:** Report Naive Bayes as a baseline, not a recommendation | Naive Bayes can classify well even when its independence assumption is violated (Domingos & Pazzani, 1997), but pushes probabilities towards 0 and 1 (Niculescu-Mizil & Caruana, 2005) | Using Naive Bayes probabilities in the profit rule -- our Brier score (0.212 vs 0.175) confirms the calibration problem |
+| **Task 8:** Hierarchical Bayesian model to pool information across countries | Shrinking many small-group estimates towards the overall mean improves them (Efron & Morris, 1975); hierarchical Bayes is established in customer-base analysis (Abe, 2009); weakly informative priors are recommended for the between-group standard deviation (Gelman, 2006) | Separate per-country estimates -- 26 of 41 countries have fewer than 10 customers |
+| **Task 9:** Weekly aggregation, auto.arima, and comparison with a naive forecast | Automatic ARIMA selection as implemented in R's `forecast` package (Hyndman & Khandakar, 2008); retail forecasting evidence stresses benchmarking against simple methods (Fildes et al., 2022; Makridakis et al., 2022) | Deploying a seasonal forecast -- two seasonal cycles are not enough, and our ARIMA did not beat the naive benchmark |
 
-## 2.4 Making the Review Critical
+## 2.8 Meeting the Minimum Requirements
 
-For **every** paper included in the final literature review (not only the anchor papers),
-complete a row in the following comparison table. This structure is required by the brief,
-which explicitly states that the review "should critically compare previous studies rather
-than simply summarizing them."
+| Requirement | Required | This review |
+|---|---|---|
+| Peer-reviewed research papers | ≥ 15 | **44** (43 journal articles + 1 peer-reviewed conference paper, ICML 2005) |
+| Journal papers | ≥ 10 | **43** |
+| Published within the last five years (2021 or later) | ≥ 5 | **6**: Devriendt et al. (2021); Chou et al. (2022); Gattermann-Itschert & Thonemann (2022); Haupt & Lessmann (2022); Fildes et al. (2022); Makridakis et al. (2022) |
 
-| Author (Year) | Method | Dataset | Evaluation Metric | Strengths | Weaknesses / Gaps |
-|---|---|---|---|---|---|
-| *(one row per paper)* | | | | | |
+The dataset (Chen, 2012) is cited separately and is not counted as a paper.
 
-## 2.5 Research Gap
+## 2.9 References
 
-Synthesising across the anchor papers and the broader churn/CLV literature, a consistent
-pattern emerges: **many published studies optimise predictive accuracy while neglecting
-interpretability, calibrated probabilities, and profit-based decision-making.** A model
-that achieves a marginally higher AUC is not necessarily more useful to a business if its
-probability estimates cannot be trusted for a cost/benefit decision, or if its coefficients
-cannot be explained to non-technical stakeholders such as a marketing team or a Board of
-Directors.
+Abe, M. (2009). "Counting your customers" one by one: A hierarchical Bayes extension to the Pareto/NBD model. *Marketing Science, 28*(3), 541--553. https://doi.org/10.1287/mksc.1090.0502
 
-This consultancy project is deliberately designed to address all three gaps
-simultaneously:
+Ascarza, E. (2018). Retention futility: Targeting high-risk customers might be ineffective. *Journal of Marketing Research, 55*(1), 80--98. https://doi.org/10.1509/jmr.16.0163
 
-- **Interpretability** -- via odds-ratio reporting on a penalised logistic regression model,
-  rather than a black-box classifier.
-- **Calibrated probabilities** -- via explicit calibration-curve and Brier-score evaluation,
-  not accuracy or AUC alone.
-- **Profit-based decision-making** -- via an expected-profit comparison across targeting
-  strategies, directly connecting the statistical model to the business's retention-budget
-  decision.
+Brier, G. W. (1950). Verification of forecasts expressed in terms of probability. *Monthly Weather Review, 78*(1), 1--3. https://doi.org/10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2
+
+Brown, M. B., & Forsythe, A. B. (1974). Robust tests for the equality of variances. *Journal of the American Statistical Association, 69*(346), 364--367. https://doi.org/10.1080/01621459.1974.10482955
+
+Chen, D. (2012). *Online Retail II* [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5CG6D
+
+Chen, D., Sain, S. L., & Guo, K. (2012). Data mining for the online retail industry: A case study of RFM model-based customer segmentation using data mining. *Journal of Database Marketing & Customer Strategy Management, 19*(3), 197--208. https://doi.org/10.1057/dbm.2012.17
+
+Chou, P., Chuang, H. H.-C., Chou, Y.-C., & Liang, T.-P. (2022). Predictive analytics for customer repurchase: Interdisciplinary integration of buy till you die modeling and machine learning. *European Journal of Operational Research, 296*(2), 635--651. https://doi.org/10.1016/j.ejor.2021.04.021
+
+De Caigny, A., Coussement, K., & De Bock, K. W. (2018). A new hybrid classification algorithm for customer churn prediction based on logistic regression and decision trees. *European Journal of Operational Research, 269*(2), 760--772. https://doi.org/10.1016/j.ejor.2018.02.009
+
+Delacre, M., Lakens, D., & Leys, C. (2017). Why psychologists should by default use Welch's t-test instead of Student's t-test. *International Review of Social Psychology, 30*(1), 92--101. https://doi.org/10.5334/irsp.82
+
+Delacre, M., Leys, C., Mora, Y. L., & Lakens, D. (2019). Taking parametric assumptions seriously: Arguments for the use of Welch's F-test instead of the classical F-test in one-way ANOVA. *International Review of Social Psychology, 32*(1), 13. https://doi.org/10.5334/irsp.198
+
+Devriendt, F., Berrevoets, J., & Verbeke, W. (2021). Why you should stop predicting customer churn and start using uplift models. *Information Sciences, 548*, 497--515. https://doi.org/10.1016/j.ins.2019.12.075
+
+Domingos, P., & Pazzani, M. (1997). On the optimality of the simple Bayesian classifier under zero-one loss. *Machine Learning, 29*(2--3), 103--130. https://doi.org/10.1023/A:1007413511361
+
+Duan, N. (1983). Smearing estimate: A nonparametric retransformation method. *Journal of the American Statistical Association, 78*(383), 605--610. https://doi.org/10.1080/01621459.1983.10478017
+
+Efron, B., & Morris, C. (1975). Data analysis using Stein's estimator and its generalizations. *Journal of the American Statistical Association, 70*(350), 311--319. https://doi.org/10.1080/01621459.1975.10479864
+
+Fader, P. S., Hardie, B. G. S., & Lee, K. L. (2005a). RFM and CLV: Using iso-value curves for customer base analysis. *Journal of Marketing Research, 42*(4), 415--430. https://doi.org/10.1509/jmkr.2005.42.4.415
+
+Fader, P. S., Hardie, B. G. S., & Lee, K. L. (2005b). "Counting your customers" the easy way: An alternative to the Pareto/NBD model. *Marketing Science, 24*(2), 275--284. https://doi.org/10.1287/mksc.1040.0098
+
+Fildes, R., Ma, S., & Kolassa, S. (2022). Retail forecasting: Research and practice. *International Journal of Forecasting, 38*(4), 1283--1318. https://doi.org/10.1016/j.ijforecast.2019.06.004
+
+Gattermann-Itschert, T., & Thonemann, U. W. (2022). Proactive customer retention management in a non-contractual B2B setting based on churn prediction with random forests. *Industrial Marketing Management, 107*, 134--147. https://doi.org/10.1016/j.indmarman.2022.09.023
+
+Gelman, A. (2006). Prior distributions for variance parameters in hierarchical models. *Bayesian Analysis, 1*(3), 515--534. https://doi.org/10.1214/06-BA117A
+
+Gordini, N., & Veglio, V. (2017). Customers churn prediction and marketing retention strategies. An application of support vector machines based on the AUC parameter-selection technique in B2B e-commerce industry. *Industrial Marketing Management, 62*, 100--107. https://doi.org/10.1016/j.indmarman.2016.08.003
+
+Hastie, T., Tibshirani, R., & Tibshirani, R. (2020). Best subset, forward stepwise or lasso? Analysis and recommendations based on extensive comparisons. *Statistical Science, 35*(4), 579--592. https://doi.org/10.1214/19-STS733
+
+Haupt, J., & Lessmann, S. (2022). Targeting customers under response-dependent costs. *European Journal of Operational Research, 297*(1), 369--379. https://doi.org/10.1016/j.ejor.2021.05.045
+
+Hoerl, A. E., & Kennard, R. W. (1970). Ridge regression: Biased estimation for nonorthogonal problems. *Technometrics, 12*(1), 55--67. https://doi.org/10.1080/00401706.1970.10488634
+
+Hyndman, R. J., & Khandakar, Y. (2008). Automatic time series forecasting: The forecast package for R. *Journal of Statistical Software, 27*(3), 1--22. https://doi.org/10.18637/jss.v027.i03
+
+Jolliffe, I. T. (1982). A note on the use of principal components in regression. *Journal of the Royal Statistical Society: Series C (Applied Statistics), 31*(3), 300--303. https://doi.org/10.2307/2348005
+
+Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: A review and recent developments. *Philosophical Transactions of the Royal Society A, 374*(2065), 20150202. https://doi.org/10.1098/rsta.2015.0202
+
+Kohavi, R., Longbotham, R., Sommerfield, D., & Henne, R. M. (2009). Controlled experiments on the web: Survey and practical guide. *Data Mining and Knowledge Discovery, 18*(1), 140--181. https://doi.org/10.1007/s10618-008-0114-1
+
+Lemmens, A., & Gupta, S. (2020). Managing churn to maximize profits. *Marketing Science, 39*(5), 956--973. https://doi.org/10.1287/mksc.2020.1229
+
+Lin, M., Lucas, H. C., & Shmueli, G. (2013). Too big to fail: Large samples and the p-value problem. *Information Systems Research, 24*(4), 906--917. https://doi.org/10.1287/isre.2013.0480
+
+Little, R. J. A. (1988). A test of missing completely at random for multivariate data with missing values. *Journal of the American Statistical Association, 83*(404), 1198--1202. https://doi.org/10.1080/01621459.1988.10478722
+
+Makridakis, S., Spiliotis, E., & Assimakopoulos, V. (2022). M5 accuracy competition: Results, findings, and conclusions. *International Journal of Forecasting, 38*(4), 1346--1364. https://doi.org/10.1016/j.ijforecast.2021.11.013
+
+Manning, W. G., & Mullahy, J. (2001). Estimating log models: To transform or not to transform? *Journal of Health Economics, 20*(4), 461--494. https://doi.org/10.1016/S0167-6296(01)00086-8
+
+Neslin, S. A., Gupta, S., Kamakura, W., Lu, J., & Mason, C. H. (2006). Defection detection: Measuring and understanding the predictive accuracy of customer churn models. *Journal of Marketing Research, 43*(2), 204--211. https://doi.org/10.1509/jmkr.43.2.204
+
+Niculescu-Mizil, A., & Caruana, R. (2005). Predicting good probabilities with supervised learning. In *Proceedings of the 22nd International Conference on Machine Learning (ICML '05)* (pp. 625--632). ACM. https://doi.org/10.1145/1102351.1102430
+
+Rubin, D. B. (1976). Inference and missing data. *Biometrika, 63*(3), 581--592. https://doi.org/10.1093/biomet/63.3.581
+
+Schmittlein, D. C., Morrison, D. G., & Colombo, R. (1987). Counting your customers: Who are they and what will they do next? *Management Science, 33*(1), 1--24. https://doi.org/10.1287/mnsc.33.1.1
+
+Smith, G. (2018). Step away from stepwise. *Journal of Big Data, 5*, 32. https://doi.org/10.1186/s40537-018-0143-6
+
+Sullivan, G. M., & Feinn, R. (2012). Using effect size -- or why the P value is not enough. *Journal of Graduate Medical Education, 4*(3), 279--282. https://doi.org/10.4300/JGME-D-12-00156.1
+
+Tamaddoni Jahromi, A., Stakhovych, S., & Ewing, M. (2014). Managing B2B customer churn, retention and profitability. *Industrial Marketing Management, 43*(7), 1258--1268. https://doi.org/10.1016/j.indmarman.2014.06.016
+
+Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. *Journal of the Royal Statistical Society: Series B (Methodological), 58*(1), 267--288. https://doi.org/10.1111/j.2517-6161.1996.tb02080.x
+
+Van Calster, B., McLernon, D. J., van Smeden, M., Wynants, L., & Steyerberg, E. W. (2019). Calibration: The Achilles heel of predictive analytics. *BMC Medicine, 17*, 230. https://doi.org/10.1186/s12916-019-1466-7
+
+Verbeke, W., Dejaeger, K., Martens, D., Hur, J., & Baesens, B. (2012). New insights into churn prediction in the telecommunication sector: A profit driven data mining approach. *European Journal of Operational Research, 218*(1), 211--229. https://doi.org/10.1016/j.ejor.2011.09.031
+
+Verbraken, T., Verbeke, W., & Baesens, B. (2013). A novel profit maximizing metric for measuring classification performance of customer churn prediction models. *IEEE Transactions on Knowledge and Data Engineering, 25*(5), 961--973. https://doi.org/10.1109/TKDE.2012.50
+
+Whittingham, M. J., Stephens, P. A., Bradbury, R. B., & Freckleton, R. P. (2006). Why do we still use stepwise modelling in ecology and behaviour? *Journal of Animal Ecology, 75*(5), 1182--1189. https://doi.org/10.1111/j.1365-2656.2006.01141.x
+
+Zou, H., & Hastie, T. (2005). Regularization and variable selection via the elastic net. *Journal of the Royal Statistical Society: Series B (Statistical Methodology), 67*(2), 301--320. https://doi.org/10.1111/j.1467-9868.2005.00503.x
