@@ -303,9 +303,9 @@ chose *not* to do as a result.
 | Decision | Research support | What we dropped, and why |
 |---|---|---|
 | Welch's t-test for comparing means | Welch's test controls false positives better when variances differ and loses little when they are equal, so it should be the default (Delacre, Lakens & Leys, 2017) | Student's t-test -- it assumes equal variances, which Test 3 shows do not hold |
-| Brown-Forsythe (median-centred Levene) test for comparing variances | Robust to non-normal data (Brown & Forsythe, 1974) | The classical F-test of variances -- very sensitive to non-normality, and basket values are heavily skewed |
+| Brown-Forsythe (median-centred Levene) test for comparing variances | Robust to non-normal data (Brown & Forsythe, 1974) | The classical F-test of variances -- very sensitive to non-normality, and customer-level average order values are heavily right-skewed |
 | Welch ANOVA with Games-Howell post-hoc tests | Classical ANOVA can be severely biased under unequal variances; Welch's F is recommended by default (Delacre, Leys, Mora & Lakens, 2019) | Classical one-way ANOVA |
-| Report effect sizes (Cohen's d, Cramér's V, eta-squared) with every p-value | With very large samples p-values shrink towards zero even for trivial effects (Lin, Lucas & Shmueli, 2013); effect size, not p, shows practical importance (Sullivan & Feinn, 2012) | Reporting p-values alone -- with 5,253 customers, Test 2 is "significant" yet its effect is small (V = 0.09) |
+| Report effect sizes (Cohen's d, Cramér's V, variance ratio, omega-squared) with every p-value | With very large samples p-values shrink towards zero even for trivial effects (Lin, Lucas & Shmueli, 2013); effect size, not p, shows practical importance (Sullivan & Feinn, 2012) | Reporting p-values alone -- with 5,253 customers, Test 2 is "significant" yet its effect is small (V = 0.09) |
 
 ### Predictive modelling (Task 5)
 
