@@ -22,45 +22,94 @@ cat("n customers:", nrow(customers), "\n")
 ALPHA <- 0.05
 
 # ---- Test 1: Comparison of means -------------------------------------------
-# H0: mean log(AvgBasketValue) is equal for UK and international customers
-# H1: the means differ
+# Research question: do international and UK customers differ in typical
+# customer-level average order value?
 #
-# Welch t-test (no assumption of equal variance), on log(AvgBasketValue)
-# because basket value is heavily right-skewed (see notebook 01). Two-sided:
-# there is no pre-registered direction. Mann-Whitney U is run alongside as a
-# robustness check that does not depend on the log transform.
+# Outcome: log(AvgBasketValue), AvgBasketValue = Monetary / Frequency.
+# H0: mean log(AvgBasketValue) is equal for UK and international customers
+# H1: the means differ (two-sided: no pre-registered direction)
+#
+# Test: Welch t-test on the log scale. Average order value is heavily
+# right-skewed (notebook 01); the log makes the groups roughly symmetric, and a
+# difference in mean logs back-transforms to a RATIO OF GEOMETRIC MEANS, which
+# is the business-readable effect. Welch because the groups are very unequal
+# in size and need not have equal variances (Test 3 shows they do not).
+# Assumption checks: group sizes and skewness of the log outcome (printed).
+# With n = 457 and 4,796 the t-test relies on approximate normality of the
+# group MEANS, which holds at these sizes for a near-symmetric log outcome.
+# Robustness: Mann-Whitney U on the same outcome (no normality assumption).
+# Effect sizes: geometric-mean ratio with 95% CI, and Cohen's d with 95% CI.
 
-cat("\n=== Test 1: Comparison of means (Welch t-test) ===\n")
+skewness <- function(x) mean((x - mean(x))^3) / sd(x)^3
+
+cat("\n=== Test 1: Comparison of means (Welch t-test on log average order value) ===\n")
 customers$log_basket <- log(customers$AvgBasketValue)
+customers$Group1 <- factor(customers$IsUK, levels = c(0, 1), labels = c("International", "UK"))
 
-t_res <- t.test(log_basket ~ IsUK, data = customers)
-print(t_res)
+print(as.data.frame(customers %>% group_by(Group1) %>%
+  summarise(n = n(), geo_mean_gbp = exp(mean(log_basket)), median_gbp = median(AvgBasketValue),
+            mean_log = mean(log_basket), sd_log = sd(log_basket), skew_log = skewness(log_basket))),
+  digits = 4, row.names = FALSE)
 
-d_res <- cohens_d(log_basket ~ IsUK, data = customers)
-cat("Cohen's d:", round(d_res$Cohens_d, 3),
-    " 95% CI [", round(d_res$CI_low, 3), ",", round(d_res$CI_high, 3), "]\n")
+t_res <- t.test(log_basket ~ Group1, data = customers)   # difference = International - UK
+cat(sprintf("Welch t(%.1f) = %.2f, p = %s\n", t_res$parameter, t_res$statistic,
+            format.pval(t_res$p.value, digits = 3, eps = 0.001)))
+gm_ratio <- exp(diff(rev(t_res$estimate)))                # exp(mean_Intl - mean_UK)
+cat(sprintf("Geometric-mean ratio (International / UK) = %.2f, 95%% CI [%.2f, %.2f]\n",
+            gm_ratio, exp(t_res$conf.int[1]), exp(t_res$conf.int[2])))
 
-w_res <- wilcox.test(log_basket ~ IsUK, data = customers, conf.int = TRUE)
-cat("Mann-Whitney U robustness check: W =", w_res$statistic, " p =", round(w_res$p.value, 5), "\n")
+d_res <- cohens_d(log_basket ~ Group1, data = customers)
+cat(sprintf("Cohen's d = %.2f, 95%% CI [%.2f, %.2f]\n", d_res$Cohens_d, d_res$CI_low, d_res$CI_high))
+
+w_res <- wilcox.test(log_basket ~ Group1, data = customers)
+cat(sprintf("Robustness (Mann-Whitney U): W = %.0f, p = %s\n", w_res$statistic,
+            format.pval(w_res$p.value, digits = 3, eps = 0.001)))
 
 # ---- Test 2: Comparison of proportions -------------------------------------
-# H0: repurchase rate is equal for Q4-acquired and non-Q4-acquired customers
-# H1: the proportions differ
+# Research question: do customers first acquired in Q4 (Oct-Dec) repurchase in
+# the 90 days after the cutoff at a different rate from other customers?
 #
-# Chi-square test of independence (equivalent to a two-proportion z-test for
-# a 2x2 table). Cramer's V as the effect size.
+# H0: the repurchase proportion is equal for Q4-acquired and other customers
+# H1: the proportions differ (two-sided)
+#
+# Test: chi-square test of independence on the 2x2 table (equivalent to the
+# two-proportion z-test), with Yates' continuity correction. Assumptions:
+# independent customers (one row each) and all expected counts >= 5 (printed).
+# Effect sizes: the absolute difference in repurchase proportions with a 95%
+# CI (the business-readable effect), the relative risk and odds ratio with
+# 95% CIs, and Cramer's V with a two-sided 95% CI (the default one-sided CI
+# runs to 1 and is uninformative).
 
-cat("\n=== Test 2: Comparison of proportions (chi-square) ===\n")
+cat("\n=== Test 2: Comparison of proportions (chi-square / two-proportion test) ===\n")
+q4 <- customers$AcquiredInQ4 == 1
+x2 <- c(Q4 = sum(customers$Repurchase[q4]), NotQ4 = sum(customers$Repurchase[!q4]))
+n2 <- c(Q4 = sum(q4), NotQ4 = sum(!q4))
+print(data.frame(group = names(n2), n = n2, repurchased = x2, proportion = round(x2 / n2, 4)),
+      row.names = FALSE)
+
 tab2 <- table(customers$AcquiredInQ4, customers$Repurchase)
-print(tab2)
-print(prop.table(tab2, margin = 1))
-
 chi_res <- chisq.test(tab2)
-print(chi_res)
+cat(sprintf("Smallest expected count: %.0f (>= 5 required)\n", min(chi_res$expected)))
+cat(sprintf("Chi-square(%d) = %.2f, p = %s\n", chi_res$parameter, chi_res$statistic,
+            format.pval(chi_res$p.value, digits = 3, eps = 0.001)))
 
-v_res <- cramers_v(tab2)
-cat("Cramer's V:", round(v_res$Cramers_v, 3),
-    " 95% CI [", round(v_res$CI_low, 3), ",", round(v_res$CI_high, 3), "]\n")
+pt_res <- prop.test(x2, n2)   # same statistic; CI for p_Q4 - p_NotQ4
+cat(sprintf("Difference in proportions (Q4 - not Q4) = %.3f, 95%% CI [%.3f, %.3f] (percentage points: %.1f [%.1f, %.1f])\n",
+            diff(rev(pt_res$estimate)), pt_res$conf.int[1], pt_res$conf.int[2],
+            100 * diff(rev(pt_res$estimate)), 100 * pt_res$conf.int[1], 100 * pt_res$conf.int[2]))
+
+p_q4 <- x2[["Q4"]] / n2[["Q4"]]; p_nq <- x2[["NotQ4"]] / n2[["NotQ4"]]
+rr <- p_q4 / p_nq
+se_log_rr <- sqrt(1 / x2[["Q4"]] - 1 / n2[["Q4"]] + 1 / x2[["NotQ4"]] - 1 / n2[["NotQ4"]])
+or <- (p_q4 / (1 - p_q4)) / (p_nq / (1 - p_nq))
+se_log_or <- sqrt(1 / x2[["Q4"]] + 1 / (n2[["Q4"]] - x2[["Q4"]]) +
+                  1 / x2[["NotQ4"]] + 1 / (n2[["NotQ4"]] - x2[["NotQ4"]]))
+cat(sprintf("Relative risk = %.2f, 95%% CI [%.2f, %.2f]; odds ratio = %.2f, 95%% CI [%.2f, %.2f]\n",
+            rr, exp(log(rr) - 1.96 * se_log_rr), exp(log(rr) + 1.96 * se_log_rr),
+            or, exp(log(or) - 1.96 * se_log_or), exp(log(or) + 1.96 * se_log_or)))
+
+v_res <- cramers_v(tab2, alternative = "two.sided")
+cat(sprintf("Cramer's V = %.3f, 95%% CI [%.3f, %.3f]\n", v_res$Cramers_v, v_res$CI_low, v_res$CI_high))
 
 # ---- Test 3: Comparison of variances ---------------------------------------
 # Research question: is customer-level average order value more variable for
@@ -218,7 +267,6 @@ stopifnot(all(t4$SpendRate90 > 0))
 
 # Descriptive statistics and assumption diagnostics, per cohort.
 # skew_log: skewness of log(SpendRate90); outliers_log: |z| > 3 within cohort.
-skewness <- function(x) mean((x - mean(x))^3) / sd(x)^3
 cat("\nSpendRate90 (GBP/day) and log(SpendRate90) by cohort:\n")
 print(t4 %>% group_by(AcqCohort) %>%
         summarise(n = n(),
@@ -302,23 +350,33 @@ cat("\nDone.\n")
 # Numbers below are from the current data (5,253 customers). Re-check if
 # notebook 00 or R/features.R changes.
 #
-# Test 1 (means): International customers have a HIGHER mean log basket
-# value (6.07) than UK customers (5.55): t = 12.41, df = 515.8, p < .001,
-# 95% CI for the difference [0.44, 0.60] (on the log scale). Cohen's d =
-# 0.72 (medium-large) - the Mann-Whitney check agrees (p < .001), so this
-# is not an artefact of the log transform. Practical implication: pricing
-# and account-management strategy should not assume international orders
-# are smaller than UK orders - if anything the opposite holds here, likely
-# reflecting bulk/freight-consolidated ordering by fewer, larger overseas
-# wholesale accounts.
+# Test 1 (means): international customers have a higher typical average
+# order value. Geometric means: International GBP 432 (n = 457), UK GBP 257
+# (n = 4,796). Welch t(515.8) = 12.41, p < .001. Geometric-mean ratio
+# (International / UK) = 1.68, 95% CI [1.55, 1.82]: a typical international
+# customer's average order is about 55-82% larger. Cohen's d = 0.72 [0.62,
+# 0.81], medium-to-large. Mann-Whitney agrees (p < .001), so the result does
+# not depend on the log transform. Assumptions: the log outcome is close to
+# symmetric in both groups (skewness 0.29 and -0.39) and the groups are large.
+# Practical implication: pricing and account-management strategy should not
+# assume international orders are smaller than UK orders - the opposite holds,
+# likely reflecting bulk, freight-consolidated ordering by overseas wholesale
+# accounts. Limitation: association only; country is not assigned, and the
+# international group mixes about 40 countries with very different sizes.
 #
-# Test 2 (proportions): Q4-acquired customers repurchase more often (49.8%)
-# than non-Q4-acquired customers (40.2%): chi-sq = 43.4, df = 1, p < .001,
-# but Cramer's V = 0.09 - a SMALL effect despite the tiny p-value. With
-# 5,253 customers even a modest real difference is easily "significant".
-# Practical implication: Q4 acquisition timing is associated with better
-# retention, but it is a weak signal on its own - not a strong enough lever
-# to justify major spend reallocation by itself.
+# Test 2 (proportions): Q4-acquired customers repurchase more often (49.8%,
+# n = 1,728) than other customers (40.2%, n = 3,525). Chi-square(1) = 43.37,
+# p < .001 (smallest expected count 749). Difference = 9.6 percentage points,
+# 95% CI [6.7, 12.5]; relative risk 1.24 [1.16, 1.32]; odds ratio 1.48
+# [1.32, 1.66]; Cramer's V = 0.09 [0.06, 0.12] - a SMALL association despite
+# the tiny p-value, because with 5,253 customers modest differences are easily
+# "significant". Practical implication: a Q4-acquired customer is about 10
+# points more likely to come back in the next 90 days - worth using as one
+# input to targeting, but too weak on its own to justify reallocating budget.
+# Limitation: the target window (Sep-Dec 2011) is itself the Christmas season,
+# so this may reflect a seasonal buying rhythm (customers first seen in Q4
+# buy again in Q4) rather than anything about acquisition timing; the design
+# cannot separate the two.
 #
 # Test 3 (variances): outcome is customer-level average order value
 # (Monetary / Frequency). International customers: n = 457, mean GBP 664,
