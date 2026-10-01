@@ -21,6 +21,16 @@ versions of Tasks 4 and 9 for reference; they are not part of the submission.
 - **Features:** RFM (Recency, Frequency, Monetary), tenure, avg basket value, distinct
   products purchased, cancellation rate, country (UK vs international), Q4-acquisition flag.
 
+## Validation design (Task 5)
+
+Model selection does not use a random split. Customer tables are rebuilt at origins spaced 90 days apart (16 Jun 2010
+to 9 Sep 2011): each model is trained on one snapshot and evaluated on the next, giving four **development periods** used
+for tuning and selection, plus one **retrospective temporal evaluation** (train 11 Jun 2011, evaluate 9 Sep 2011). The
+latter outcomes had already been examined, so the evaluation is retrospective, not blind. The probability model is selected
+by the lowest mean development **Brier score** (rule declared before the results; LASSO selected, Ridge statistically
+indistinguishable). Spend models are selected by development RMSE (log-OLS with Duan smearing). Ranking is supported in the
+later period; probability and £ levels are not calibrated across seasons. See `notebooks/python/03b_model_selection.ipynb`.
+
 ## Repo structure
 
 ```
@@ -46,7 +56,8 @@ legacy-python/       Earlier Python-only version of the whole project (not part 
 | `python/00_data_cleaning.ipynb` | Python | Load raw data, fix quality issues, build customer-level table |
 | `python/01_descriptive_analysis.ipynb` | Python | Task 3 — Dataset understanding & descriptive analysis |
 | `r/02_statistical_inference.R` | **R** | Task 4 — Hypothesis tests (Welch t-test, chi-square, Levene, Welch ANOVA) |
-| `python/03_predictive_modelling.ipynb` | Python | Task 5 — Logistic/LASSO/elastic net, Gamma GLM |
+| `python/03_predictive_modelling.ipynb` | Python | Task 5 — Exploratory: fits, assumption checks and diagnostics on one random split |
+| `python/03b_model_selection.ipynb` | Python | Task 5 — **Formal model selection**: rolling-origin development, Brier rule, retrospective temporal evaluation; tables in `reports/tables/` |
 | `python/04_pca_evaluation.ipynb` | Python | Task 7 — PCA on customer × product matrix |
 | `python/05_bayesian_methods.ipynb` | Python | Task 8 — Naive Bayes, hierarchical regression |
 | `r/06_time_series.R` | **R** | Task 9 — Decomposition, stationarity, ARIMA/SARIMA |

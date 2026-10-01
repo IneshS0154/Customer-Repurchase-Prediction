@@ -41,7 +41,15 @@ script from the project root, not from inside `notebooks/r/`:
 Rscript notebooks/r/02_statistical_inference.R
 ```
 
-There is no test suite, linter, or build step — this is an analysis project.
+The consultancy report is assembled from `docs/*.md` (one file per task, plus `report_front.md`)
+and printed to PDF with headless Chrome. Edit the Markdown, never the generated output:
+```bash
+.venv/bin/python reports/build_report.py     # -> reports/final_report.html and .pdf
+```
+The section order lives in `SECTIONS` in that script. Numbers in `docs/` are copied from
+notebook/script outputs, so re-check them whenever an analysis is rerun.
+
+There is no test suite or linter — this is an analysis project.
 `notebooks/python/00_data_cleaning.ipynb` must be run first; every other script/notebook
 (Python or R) reads its output from `data/processed/`.
 
@@ -93,11 +101,14 @@ logical — `IsCancellation` needs `as.logical()` after `read.csv()` in any R sc
 reads `invoice_lines_clean.csv`.
 
 **Notebook-to-task mapping** (see README.md for the full table): `00_data_cleaning` builds
-the processed tables; `01`, `03`–`05` (Python) map to Tasks 3, 5, 7, 8; `02`, `06` (R) map
-to Tasks 4, 9. Tasks 1, 2, 6, 10, 11, 12 are written deliverables (problem framing, lit
-review, experimental design, innovation proposal, expert interview, final recommendations)
-with no corresponding notebook — `references/literature_review.md` is the stub for Task
-2's comparison table, `docs/` holds the Task 1/2 write-up.
+the processed tables; `01`, `03`–`05` (Python) map to Tasks 3, 5, 7, 8 (`03b` holds Task 5's formal model selection: rolling-origin
+development periods, Brier selection rule, retrospective temporal evaluation; `03` is the exploratory random-split
+analysis); `07` (Python) holds the Task 6 power analysis; `02`, `06` (R) map
+to Tasks 4, 9. Tasks 1, 2, 6, 10, 11, 12 are written deliverables in `docs/`. **Task 11 (expert
+validation) has not happened yet** — `docs/task11_expert_validation.md` is a placeholder;
+never write expert feedback into it or into Task 12 without real evidence in `docs/evidence/`.
+Margin (30%), offer cost (£10) and uplift (10%) in notebooks 03/05 are labelled placeholders;
+profit on realised `FutureSpend` is retrospective only and must not be presented as deployable.
 
 **Team ownership** (also in README.md): different people own different notebooks/tasks, so
 avoid restructuring `src/`/`R/` function signatures without checking what other

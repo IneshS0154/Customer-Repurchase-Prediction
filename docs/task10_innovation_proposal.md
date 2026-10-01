@@ -34,7 +34,7 @@ A weekly scoring and decision pipeline with a built-in experiment loop (Figure 1
 |---|---|---|
 | **Data inputs** | Invoice lines (orders, cancellations, prices, dates), customer accounts (ID, country), and a new campaign log recording who was sent which offer and when, plus holdout assignments | Task 3 data; the campaign log is new and needed for Stage 6 |
 | **Feature pipeline** | Weekly job that recomputes, as of the scoring date only, recency, frequency, monetary value, tenure, average order value, product breadth, cancellation rate, UK/international and Q4-acquired flag. Uses the same cleaning rules as notebook 00 (duplicates, non-product codes, non-positive prices, reversed orders) | The cutoff design (`src/features.py`) guarantees no future data leaks into a score |
-| **Model outputs** | Per customer: P(repurchase in the next 90 days) from the elastic-net logistic model; E[spend if they return] from the Gamma GLM; expected spend = the product. Countries or accounts with very little history get a pooled estimate from the hierarchical Bayesian model | Tasks 5 and 8 |
+| **Model outputs** | Per customer: P(repurchase in the next 90 days) from the LASSO logistic model (selected under the Task 5 Brier rule); E[spend if they return] from log-OLS with Duan smearing; expected spend = the product. Used for **ranking**: the probability and £ levels shift between seasons. Countries or accounts with very little history get a pooled estimate from the hierarchical Bayesian model | Tasks 5 and 8 |
 | **Decision thresholds** | Contact if uplift × margin × expected spend > offer cost. With placeholder values (10% uplift, 30% margin, £10 offer) that means expected spend > £333, which would select about 44% of customers (notebook 03, C3). **The uplift must come from the pilot**, not from assumption | Task 5, C3; Task 6 |
 | **Dashboard tiers** | **A. Secure, high value:** high P and high expected spend. **B. At risk, high value:** high expected spend but P falling as recency grows. **C. Lapsing, low value:** low P and low expected spend. **D. New / thin history:** tenure under 90 days or an unseen country, scored with pooled estimates | Tier cut-offs set from score quantiles and reviewed after the pilot |
 | **Campaign actions** | **A:** account-manager service contact, *no discount*. The top tier repurchases at about 81% anyway (notebook 07), so a discount mostly rewards purchases that would have happened. **B:** the offer tested in the pilot, if it passed. **C:** low-cost automated e-mail only. **D:** onboarding sequence | Ascarza (2018); Devriendt et al. (2021) |
@@ -77,7 +77,7 @@ protection lead for sign-off.
 | Level | KPI | Proposed target / trigger | Why this number |
 |---|---|---|---|
 | Model | AUC on cohorts whose 90-day window has closed | Retrain if it falls below **0.76** | 0.76 is what the simple recency rule achieves (notebook 03, A9); below it, the model adds nothing |
-| Model | Calibration: mean predicted vs actual repurchase rate | Recalibrate **every campaign period**; alert if off by more than **5 points** | Out-of-time tests showed the probability level shifts by 12–15 points between seasons while the ranking holds (notebook 03, A8); miscalibrated probabilities mislead decisions (Van Calster et al., 2019) |
+| Model | Calibration: mean predicted vs actual repurchase rate | Alert if off by more than **5 points**; any recalibration must be validated before use (a simple previous-period correction made the next period worse in Task 5) | Out-of-time tests showed the probability level shifts by 12–15 points between seasons while the ranking holds (notebook 03, A8); miscalibrated probabilities mislead decisions (Van Calster et al., 2019) |
 | Data | Feature drift and base-rate drift | Monthly check against the training period | Base rates ranged from 32% to 58% across the cutoffs tested (notebook 03, A8) |
 | Data | Data-quality checks | Weekly: row counts, share of missing customer IDs (22.8% in the raw data), non-product codes | Task 3 cleaning audit |
 | Business | Incremental repurchase rate, treated vs holdout, per tier | At least the pilot's pre-registered threshold | The only KPI that measures the *effect* of the system |
@@ -97,7 +97,7 @@ latest matured cohort.
 ## 10.6 Implementation challenges
 
 * **Outcome lag.** It takes 90 days to learn whether a score was right, so problems surface slowly.
-* **Seasonality.** Probability levels shift between seasons (notebook 03, A8), so recalibration is a standing task, not a
+* **Seasonality.** Probability levels shift between seasons (Task 5), and a simple previous-period correction did not fix it, so calibration is a standing problem, not a
   one-off.
 * **Missing identities.** 22.8% of raw invoice lines have no customer ID, and they are not missing at random (Task 3). The
   system can only see and act on identifiable accounts. Encouraging account log-in at checkout widens its coverage.

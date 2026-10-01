@@ -5,14 +5,14 @@ from notebooks 03 and 05 where stated. Re-check them if notebook 00 or `src/` ch
 
 ## 6.1 Why an experiment is needed
 
-Every model in this project predicts **who will repurchase without intervention**. None of them measures **what a
+Every model in this project predicts **who will repurchase under the conditions seen historically**. None of them measures **what a
 retention offer changes**. The difference matters commercially:
 
 * The repurchase models (Task 5) rank customers well (repeated cross-validation AUC 0.799 ± 0.015; top-decile lift 2.09),
   but the customers they rank highest are mostly those who were going to buy anyway. The top recency-by-frequency tier
   repurchases at 81% with no offer at all (notebook 07).
 * The profit calculations in notebooks 03 and 05 depend on an **assumed** uplift. Across plausible values of uplift
-  × margin, the recommended contact share ranges from 4% to 82%, and predicted profit from £0.6k to £46k (notebook 03, C3).
+  × margin, the recommended contact share ranges from 4% to 82%, and predicted profit from £1.4k to £47k (notebook 03, C3).
   The data cannot narrow this range. Customers were never randomly offered anything, so the offer's effect is not
   identified.
 * The literature makes the same point. The highest-risk customers are not necessarily the ones an intervention helps

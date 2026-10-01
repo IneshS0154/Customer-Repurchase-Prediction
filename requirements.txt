@@ -10,3 +10,4 @@ jupyter
 lifetimes
 pymc
 arviz
+markdown  # builds the report PDF (reports/build_report.py)
