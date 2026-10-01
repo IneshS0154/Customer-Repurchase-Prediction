@@ -50,6 +50,7 @@ legacy-python/       Earlier Python-only version of the whole project (not part 
 | `python/04_pca_evaluation.ipynb` | Python | Task 7 — PCA on customer × product matrix |
 | `python/05_bayesian_methods.ipynb` | Python | Task 8 — Naive Bayes, hierarchical regression |
 | `r/06_time_series.R` | **R** | Task 9 — Decomposition, stationarity, ARIMA/SARIMA |
+| `python/07_experimental_design.ipynb` | Python | Task 6 — Sample size, power and blocking for the proposed retention pilot |
 
 Why this split: Tasks 4 and 9 are R's strongest natural fit (`rstatix`/`car`/`effectsize`
 for inference, `forecast`/`tseries` for time series), are self-contained, and were low-risk
@@ -59,7 +60,8 @@ worth re-risking by porting.
 
 Tasks 1, 2, 6, 10, 11, 12 (problem framing, literature review, experimental design
 write-up, innovation proposal, expert validation, final recommendations) are written
-components — see `references/`, `docs/`, and the final report, not notebooks.
+components in `docs/` (one file per task; Task 6 draws its numbers from notebook 07).
+Task 11 is a placeholder until an expert has actually been consulted.
 
 ## Setup
 
