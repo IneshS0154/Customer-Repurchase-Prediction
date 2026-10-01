@@ -1,0 +1,7 @@
+origin t,features from,"targets [t, t+90d)",eligible customers,prevalence,repurchasers,mean FutureSpend (all),median tenure (days),role
+2010-06-16,2009-12-01,2010-06-16 to 2010-09-14,2832,0.476,1349,518.4,127.0,train only (dev 1)
+2010-09-14,2009-12-01,2010-09-14 to 2010-12-13,3364,0.575,1934,735.7,197.0,dev 1 eval / dev 2 train
+2010-12-13,2009-12-01,2010-12-13 to 2011-03-13,4292,0.304,1306,279.2,255.0,dev 2 eval / dev 3 train
+2011-03-13,2009-12-01,2011-03-13 to 2011-06-11,4581,0.353,1616,332.8,327.0,dev 3 eval / dev 4 train
+2011-06-11,2009-12-01,2011-06-11 to 2011-09-09,4951,0.32,1586,333.9,399.0,dev 4 eval / final train
+2011-09-09,2009-12-01,2011-09-09 to 2011-12-08,5253,0.434,2278,530.3,472.0,retrospective temporal evaluation
